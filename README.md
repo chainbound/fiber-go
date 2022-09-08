@@ -94,6 +94,9 @@ func main() {
 #### `SendTransaction`
 ```go
 import (
+    "context"
+    "math/big"
+
     client "github.com/chainbound/fiber-go"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -113,7 +116,7 @@ func main() {
     }
 
     // Example transaction
-    tx := types.NewTx(&DynamicFeeTx{
+    tx := types.NewTx(&types.DynamicFeeTx{
         Nonce:     nonce,
         To:        common.HexToAddress("0x...."),
         Value:     big.NewInt(100),
@@ -142,6 +145,9 @@ func main() {
 #### `BackrunTransaction`
 ```go
 import (
+    "context"
+    "math/big"
+
     client "github.com/chainbound/fiber-go"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -161,7 +167,7 @@ func main() {
     }
 
     // Example transaction
-    tx := types.NewTx(&DynamicFeeTx{
+    tx := types.NewTx(&types.DynamicFeeTx{
         Nonce:     nonce,
         To:        common.HexToAddress("0x...."),
         Value:     big.NewInt(100),
