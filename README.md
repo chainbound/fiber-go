@@ -31,10 +31,14 @@ You can find some examples on how to subscribe to the various subscriptions belo
 #### Transactions
 ```go
 import (
-    client "github.com/chainbound/fiber-go"
+    "context"
+    "log"
+    "time"
+    
+    fiber "github.com/chainbound/fiber-go"
     "github.com/chainbound/fiber-go/protobuf/api"
 
-	"github.com/ethereum/go-ethereum/core/types"
+    "github.com/ethereum/go-ethereum/core/types"
 )
 
 func main() {
@@ -62,7 +66,11 @@ func main() {
 #### Blocks
 ```go
 import (
-    client "github.com/chainbound/fiber-go"
+    "context"
+    "log"
+    "time"
+    
+    fiber "github.com/chainbound/fiber-go"
     "github.com/chainbound/fiber-go/protobuf/api"
     "github.com/chainbound/fiber-go/protobuf/eth"
 )
@@ -95,13 +103,15 @@ func main() {
 ```go
 import (
     "context"
+    "log"
     "math/big"
+    "time"
 
-    client "github.com/chainbound/fiber-go"
+    fiber "github.com/chainbound/fiber-go"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/common"
-   	"github.com/ethereum/go-ethereum/crypto"
+    "github.com/ethereum/go-ethereum/core/types"
+    "github.com/ethereum/go-ethereum/common"
+    "github.com/ethereum/go-ethereum/crypto"
 
 )
 
@@ -146,13 +156,15 @@ func main() {
 ```go
 import (
     "context"
+    "log"
     "math/big"
+    "time"
 
-    client "github.com/chainbound/fiber-go"
+    fiber "github.com/chainbound/fiber-go"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/common"
-   	"github.com/ethereum/go-ethereum/crypto"
+    "github.com/ethereum/go-ethereum/core/types"
+    "github.com/ethereum/go-ethereum/common"
+    "github.com/ethereum/go-ethereum/crypto"
 
 )
 
