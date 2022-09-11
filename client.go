@@ -15,17 +15,20 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 )
 
 type Client struct {
 	target string
 	conn   *grpc.ClientConn
 	client api.APIClient
+	key    string
 }
 
-func NewClient(target string) *Client {
+func NewClient(target, apiKey string) *Client {
 	return &Client{
 		target: target,
+		key:    apiKey,
 	}
 }
 
@@ -56,6 +59,8 @@ func (c *Client) SendTransaction(ctx context.Context, tx *types.Transaction) (st
 		return "", 0, fmt.Errorf("converting to protobuf: %w", err)
 	}
 
+	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
+
 	res, err := c.client.SendTransaction(ctx, proto)
 	if err != nil {
 		return "", 0, fmt.Errorf("sending tx to api: %w", err)
@@ -69,6 +74,8 @@ func (c *Client) BackrunTransaction(ctx context.Context, hash common.Hash, tx *t
 	if err != nil {
 		return "", 0, fmt.Errorf("converting to protobuf: %w", err)
 	}
+
+	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 
 	res, err := c.client.Backrun(ctx, &api.BackrunMsg{
 		Hash: hash.String(),
@@ -86,7 +93,10 @@ func (c *Client) BackrunTransaction(ctx context.Context, hash common.Hash, tx *t
 // channel according to the filter. This function blocks and should be called in a goroutine.
 // If there's an error receiving the new message it will close the channel and return the error.
 func (c *Client) SubscribeNewTxs(filter *api.TxFilter, ch chan<- *types.Transaction) error {
-	res, err := c.client.SubscribeNewTxs(context.Background(), filter)
+	ctx := context.Background()
+	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
+
+	res, err := c.client.SubscribeNewTxs(ctx, filter)
 	if err != nil {
 		return fmt.Errorf("subscribing to api: %w", err)
 	}
@@ -103,7 +113,10 @@ func (c *Client) SubscribeNewTxs(filter *api.TxFilter, ch chan<- *types.Transact
 }
 
 func (c *Client) SubscribeNewBlocks(filter *api.BlockFilter, ch chan<- *eth.Block) error {
-	res, err := c.client.SubscribeNewBlocks(context.Background(), filter)
+	ctx := context.Background()
+	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
+
+	res, err := c.client.SubscribeNewBlocks(ctx, filter)
 	if err != nil {
 		return fmt.Errorf("subscribing to api: %w", err)
 	}

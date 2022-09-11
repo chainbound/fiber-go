@@ -10,11 +10,16 @@ go get github.com/chainbound/fiber-go
 ### Connecting
 ```go
 import (
+    "context"
+    "log"
+
     fiber "github.com/chainbound/fiber-go"
 )
 
 func main() {
-    client := fiber.NewClient("YOUR_API_HERE")
+    endpoint := "fiber.example.io"
+    apiKey := "YOUR_API_KEY"
+    client := fiber.NewClient(endpoint, apiKey)
     defer client.Close()
 
     ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -31,7 +36,10 @@ You can find some examples on how to subscribe to the various subscriptions belo
 #### Transactions
 ```go
 import (
-    client "github.com/chainbound/fiber-go"
+    "context"
+    "log"
+
+    fiber "github.com/chainbound/fiber-go"
     "github.com/chainbound/fiber-go/protobuf/api"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -68,7 +76,9 @@ import (
 )
 
 func main() {
-    client := fiber.NewClient("YOUR_API_HERE")
+    endpoint := "fiber.example.io"
+    apiKey := "YOUR_API_KEY"
+    client := fiber.NewClient(endpoint, apiKey)
     defer client.Close()
 
     ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -106,7 +116,9 @@ import (
 )
 
 func main() {
-    client := fiber.NewClient("YOUR_API_HERE")
+    endpoint := "fiber.example.io"
+    apiKey := "YOUR_API_KEY"
+    client := fiber.NewClient(endpoint, apiKey)
     defer client.Close()
 
     ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -157,7 +169,9 @@ import (
 )
 
 func main() {
-    client := fiber.NewClient("YOUR_API_HERE")
+    endpoint := "fiber.example.io"
+    apiKey := "YOUR_API_KEY"
+    client := fiber.NewClient(endpoint, apiKey)
     defer client.Close()
 
     ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
