@@ -48,7 +48,9 @@ import (
 )
 
 func main() {
-    client := fiber.NewClient("YOUR_API_HERE")
+    endpoint := "fiber.example.io"
+    apiKey := "YOUR_API_KEY"
+    client := fiber.NewClient(endpoint, apiKey)
     defer client.Close()
 
     ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
