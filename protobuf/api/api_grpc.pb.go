@@ -26,6 +26,7 @@ type APIClient interface {
 	SubscribeNewTxs(ctx context.Context, in *TxFilter, opts ...grpc.CallOption) (API_SubscribeNewTxsClient, error)
 	SubscribeNewBlocks(ctx context.Context, in *BlockFilter, opts ...grpc.CallOption) (API_SubscribeNewBlocksClient, error)
 	SendTransaction(ctx context.Context, in *eth.Transaction, opts ...grpc.CallOption) (*TransactionResponse, error)
+	SendRawTransaction(ctx context.Context, in *RawTxMsg, opts ...grpc.CallOption) (*TransactionResponse, error)
 	// Backrun is the RPC method for backrunning a transaction.
 	Backrun(ctx context.Context, in *BackrunMsg, opts ...grpc.CallOption) (*TransactionResponse, error)
 }
@@ -111,6 +112,15 @@ func (c *aPIClient) SendTransaction(ctx context.Context, in *eth.Transaction, op
 	return out, nil
 }
 
+func (c *aPIClient) SendRawTransaction(ctx context.Context, in *RawTxMsg, opts ...grpc.CallOption) (*TransactionResponse, error) {
+	out := new(TransactionResponse)
+	err := c.cc.Invoke(ctx, "/api.API/SendRawTransaction", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *aPIClient) Backrun(ctx context.Context, in *BackrunMsg, opts ...grpc.CallOption) (*TransactionResponse, error) {
 	out := new(TransactionResponse)
 	err := c.cc.Invoke(ctx, "/api.API/Backrun", in, out, opts...)
@@ -127,6 +137,7 @@ type APIServer interface {
 	SubscribeNewTxs(*TxFilter, API_SubscribeNewTxsServer) error
 	SubscribeNewBlocks(*BlockFilter, API_SubscribeNewBlocksServer) error
 	SendTransaction(context.Context, *eth.Transaction) (*TransactionResponse, error)
+	SendRawTransaction(context.Context, *RawTxMsg) (*TransactionResponse, error)
 	// Backrun is the RPC method for backrunning a transaction.
 	Backrun(context.Context, *BackrunMsg) (*TransactionResponse, error)
 	mustEmbedUnimplementedAPIServer()
@@ -144,6 +155,9 @@ func (UnimplementedAPIServer) SubscribeNewBlocks(*BlockFilter, API_SubscribeNewB
 }
 func (UnimplementedAPIServer) SendTransaction(context.Context, *eth.Transaction) (*TransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendTransaction not implemented")
+}
+func (UnimplementedAPIServer) SendRawTransaction(context.Context, *RawTxMsg) (*TransactionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendRawTransaction not implemented")
 }
 func (UnimplementedAPIServer) Backrun(context.Context, *BackrunMsg) (*TransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Backrun not implemented")
@@ -221,6 +235,24 @@ func _API_SendTransaction_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _API_SendRawTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RawTxMsg)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(APIServer).SendRawTransaction(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/api.API/SendRawTransaction",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(APIServer).SendRawTransaction(ctx, req.(*RawTxMsg))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _API_Backrun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(BackrunMsg)
 	if err := dec(in); err != nil {
@@ -249,6 +281,10 @@ var API_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SendTransaction",
 			Handler:    _API_SendTransaction_Handler,
+		},
+		{
+			MethodName: "SendRawTransaction",
+			Handler:    _API_SendRawTransaction_Handler,
 		},
 		{
 			MethodName: "Backrun",

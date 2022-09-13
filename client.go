@@ -69,6 +69,17 @@ func (c *Client) SendTransaction(ctx context.Context, tx *types.Transaction) (st
 	return res.Hash, res.Timestamp, nil
 }
 
+func (c *Client) SendRawTransaction(ctx context.Context, rawTx []byte) (string, int64, error) {
+	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
+
+	res, err := c.client.SendRawTransaction(ctx, &api.RawTxMsg{RawTx: rawTx})
+	if err != nil {
+		return "", 0, fmt.Errorf("sending tx to api: %w", err)
+	}
+
+	return res.Hash, res.Timestamp, nil
+}
+
 func (c *Client) BackrunTransaction(ctx context.Context, hash common.Hash, tx *types.Transaction) (string, int64, error) {
 	proto, err := TxToProto(tx)
 	if err != nil {
