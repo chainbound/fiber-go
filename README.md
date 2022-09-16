@@ -156,7 +156,7 @@ func main() {
         log.Fatal(err)
     }
 
-    hash, timestamp, err := client.SendTransaction(ctx, tx)
+    hash, timestamp, err := client.SendTransaction(ctx, signed)
     if err != nil {
         log.Fatal(err)
     }
@@ -214,7 +214,7 @@ func main() {
     // type should be common.Hash
     target := someTargetTransactionHash
 
-    hash, timestamp, err := client.BackrunTransaction(ctx, target, tx)
+    hash, timestamp, err := client.BackrunTransaction(ctx, target, signed)
     if err != nil {
         log.Fatal(err)
     }
