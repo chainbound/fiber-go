@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/chainbound/fiber-go/protobuf/api"
 	"github.com/chainbound/fiber-go/protobuf/eth"
@@ -15,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -35,7 +37,15 @@ func NewClient(target, apiKey string) *Client {
 // Connects sets up the gRPC channel and creates the stub. It blocks until connected or the given context expires.
 // Always use a context with timeout.
 func (c *Client) Connect(ctx context.Context) error {
-	conn, err := grpc.DialContext(ctx, c.target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.DialContext(ctx, c.target,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		// Make sure the connection is kept alive
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:                time.Second * 20,
+			PermitWithoutStream: true,
+		}),
+	)
 	if err != nil {
 		return err
 	}
@@ -95,6 +105,21 @@ func (c *Client) BackrunTransaction(ctx context.Context, hash common.Hash, tx *t
 
 	if err != nil {
 		return "", 0, fmt.Errorf("sending backrun to api: %w", err)
+	}
+
+	return res.Hash, res.Timestamp, nil
+}
+
+func (c *Client) RawBackrunTransaction(ctx context.Context, hash common.Hash, rawTx []byte) (string, int64, error) {
+	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
+
+	res, err := c.client.RawBackrun(ctx, &api.RawBackrunMsg{
+		Hash:  hash.Hex(),
+		RawTx: rawTx,
+	})
+
+	if err != nil {
+		return "", 0, fmt.Errorf("sending raw backrun to api: %w", err)
 	}
 
 	return res.Hash, res.Timestamp, nil

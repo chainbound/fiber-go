@@ -29,6 +29,7 @@ type APIClient interface {
 	SendRawTransaction(ctx context.Context, in *RawTxMsg, opts ...grpc.CallOption) (*TransactionResponse, error)
 	// Backrun is the RPC method for backrunning a transaction.
 	Backrun(ctx context.Context, in *BackrunMsg, opts ...grpc.CallOption) (*TransactionResponse, error)
+	RawBackrun(ctx context.Context, in *RawBackrunMsg, opts ...grpc.CallOption) (*TransactionResponse, error)
 }
 
 type aPIClient struct {
@@ -130,6 +131,15 @@ func (c *aPIClient) Backrun(ctx context.Context, in *BackrunMsg, opts ...grpc.Ca
 	return out, nil
 }
 
+func (c *aPIClient) RawBackrun(ctx context.Context, in *RawBackrunMsg, opts ...grpc.CallOption) (*TransactionResponse, error) {
+	out := new(TransactionResponse)
+	err := c.cc.Invoke(ctx, "/api.API/RawBackrun", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // APIServer is the server API for API service.
 // All implementations must embed UnimplementedAPIServer
 // for forward compatibility
@@ -140,6 +150,7 @@ type APIServer interface {
 	SendRawTransaction(context.Context, *RawTxMsg) (*TransactionResponse, error)
 	// Backrun is the RPC method for backrunning a transaction.
 	Backrun(context.Context, *BackrunMsg) (*TransactionResponse, error)
+	RawBackrun(context.Context, *RawBackrunMsg) (*TransactionResponse, error)
 	mustEmbedUnimplementedAPIServer()
 }
 
@@ -161,6 +172,9 @@ func (UnimplementedAPIServer) SendRawTransaction(context.Context, *RawTxMsg) (*T
 }
 func (UnimplementedAPIServer) Backrun(context.Context, *BackrunMsg) (*TransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Backrun not implemented")
+}
+func (UnimplementedAPIServer) RawBackrun(context.Context, *RawBackrunMsg) (*TransactionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RawBackrun not implemented")
 }
 func (UnimplementedAPIServer) mustEmbedUnimplementedAPIServer() {}
 
@@ -271,6 +285,24 @@ func _API_Backrun_Handler(srv interface{}, ctx context.Context, dec func(interfa
 	return interceptor(ctx, in, info, handler)
 }
 
+func _API_RawBackrun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RawBackrunMsg)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(APIServer).RawBackrun(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/api.API/RawBackrun",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(APIServer).RawBackrun(ctx, req.(*RawBackrunMsg))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // API_ServiceDesc is the grpc.ServiceDesc for API service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -289,6 +321,10 @@ var API_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Backrun",
 			Handler:    _API_Backrun_Handler,
+		},
+		{
+			MethodName: "RawBackrun",
+			Handler:    _API_RawBackrun_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
