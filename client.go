@@ -45,6 +45,7 @@ func (c *Client) Connect(ctx context.Context) error {
 			Time:                time.Second * 20,
 			PermitWithoutStream: true,
 		}),
+		grpc.WithReadBufferSize(4096),
 	)
 	if err != nil {
 		return err
