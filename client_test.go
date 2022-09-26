@@ -7,8 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chainbound/fiber-go/protobuf/api"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -25,9 +23,13 @@ func TestSub(t *testing.T) {
 
 	ch := make(chan *types.Transaction)
 	go func() {
-		if err := fiber.SubscribeNewTxs(&api.TxFilter{
-			To: common.HexToAddress("0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D").Bytes(),
-		}, ch); err != nil {
+		// if err := fiber.SubscribeNewTxs(&api.TxFilter{
+		// 	To:       common.HexToAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48").Bytes(),
+		// 	MethodID: common.Hex2Bytes("7ff36ab5"),
+		// }, ch); err != nil {
+		// 	log.Println(err)
+		// }
+		if err := fiber.SubscribeNewTxs(nil, ch); err != nil {
 			log.Println(err)
 		}
 	}()

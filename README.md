@@ -36,7 +36,8 @@ You can find some examples on how to subscribe to the various subscriptions belo
 `go-ethereum` Transactions internally, but uses a protobuf block representation. This will be updated soon.
 
 Filtering is currently in progress. The filter object passed to `SubscribeNewTxs` is a simple **OR** filter, so
-if a transaction matches either to `To` or the `From` field, it will be sent on the stream. 
+if a transaction matches either to `To`, `From` or `MethodID` field, it will be sent on the stream. If you don't want
+any filtering, you can pass `nil`.
 #### Transactions
 ```go
 import (
@@ -66,6 +67,7 @@ func main() {
     go func() {
         if err := client.SubscribeNewTxs(&api.TxFilter{
 			To: common.HexToAddress("0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D").Bytes(),
+			MethodID: common.Hex2Bytes("7ff36ab5"),
         }, ch); err != nil {
             log.Fatal(err)
         }

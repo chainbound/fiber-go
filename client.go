@@ -133,6 +133,10 @@ func (c *Client) SubscribeNewTxs(filter *api.TxFilter, ch chan<- *types.Transact
 	ctx := context.Background()
 	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 
+	if filter == nil {
+		filter = &api.TxFilter{}
+	}
+
 	res, err := c.client.SubscribeNewTxs(ctx, filter)
 	if err != nil {
 		return fmt.Errorf("subscribing to api: %w", err)
