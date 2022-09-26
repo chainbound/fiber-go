@@ -34,6 +34,9 @@ func main() {
 ### Subscriptions
 You can find some examples on how to subscribe to the various subscriptions below. `fiber-go` works with
 `go-ethereum` Transactions internally, but uses a protobuf block representation. This will be updated soon.
+
+Filtering is currently in progress. The filter object passed to `SubscribeNewTxs` is a simple **OR** filter, so
+if a transaction matches either to `To` or the `From` field, it will be sent on the stream. 
 #### Transactions
 ```go
 import (
@@ -61,7 +64,9 @@ func main() {
 
     ch := make(chan *types.Transaction)
     go func() {
-        if err := client.SubscribeNewTxs(&api.TxFilter{}, ch); err != nil {
+        if err := client.SubscribeNewTxs(&api.TxFilter{
+			To: common.HexToAddress("0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D").Bytes(),
+        }, ch); err != nil {
             log.Fatal(err)
         }
     }()
