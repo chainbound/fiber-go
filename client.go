@@ -20,6 +20,70 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+type Transaction struct {
+	ChainID     uint32
+	To          *common.Address
+	From        common.Address
+	Gas         uint64
+	GasPrice    *big.Int
+	Hash        common.Hash
+	Input       []byte
+	Value       *big.Int
+	Nonce       uint64
+	Type        uint32
+	MaxFee      *big.Int
+	PriorityFee *big.Int
+	V           uint64
+	R           []byte
+	S           []byte
+}
+
+func (tx *Transaction) ToNative() *types.Transaction {
+	switch tx.Type {
+	case 0:
+		return types.NewTx(&types.LegacyTx{
+			Nonce:    tx.Nonce,
+			GasPrice: tx.GasPrice,
+			Gas:      tx.Gas,
+			To:       tx.To,
+			Value:    tx.Value,
+			Data:     tx.Input,
+			V:        big.NewInt(int64(tx.V)),
+			R:        new(big.Int).SetBytes(tx.R),
+			S:        new(big.Int).SetBytes(tx.S),
+		})
+	case 1:
+		return types.NewTx(&types.AccessListTx{
+			ChainID:  big.NewInt(int64(tx.ChainID)),
+			Nonce:    tx.Nonce,
+			GasPrice: tx.GasPrice,
+			Gas:      tx.Gas,
+			To:       tx.To,
+			Value:    tx.Value,
+			Data:     tx.Input,
+			V:        big.NewInt(int64(tx.V)),
+			R:        new(big.Int).SetBytes(tx.R),
+			S:        new(big.Int).SetBytes(tx.S),
+		})
+	case 2:
+		return types.NewTx(&types.DynamicFeeTx{
+			ChainID:   big.NewInt(int64(tx.ChainID)),
+			Nonce:     tx.Nonce,
+			GasFeeCap: tx.MaxFee,
+			GasTipCap: tx.PriorityFee,
+			Gas:       tx.Gas,
+			To:        tx.To,
+			Value:     tx.Value,
+			Data:      tx.Input,
+			V:         big.NewInt(int64(tx.V)),
+			R:         new(big.Int).SetBytes(tx.R),
+			S:         new(big.Int).SetBytes(tx.S),
+		})
+	}
+
+	return nil
+}
+
 type Client struct {
 	target string
 	conn   *grpc.ClientConn
@@ -45,7 +109,8 @@ func (c *Client) Connect(ctx context.Context) error {
 			Time:                time.Second * 20,
 			PermitWithoutStream: true,
 		}),
-		grpc.WithReadBufferSize(4096),
+		grpc.WithReadBufferSize(0),
+		grpc.WithWriteBufferSize(0),
 	)
 	if err != nil {
 		return err
@@ -129,7 +194,7 @@ func (c *Client) RawBackrunTransaction(ctx context.Context, hash common.Hash, ra
 // SubscribeNewTxs subscribes to new transactions, and sends transactions on the given
 // channel according to the filter. This function blocks and should be called in a goroutine.
 // If there's an error receiving the new message it will close the channel and return the error.
-func (c *Client) SubscribeNewTxs(filter *api.TxFilter, ch chan<- *types.Transaction) error {
+func (c *Client) SubscribeNewTxs(filter *api.TxFilter, ch chan<- *Transaction) error {
 	ctx := context.Background()
 	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 
@@ -207,53 +272,27 @@ func TxToProto(tx *types.Transaction) (*eth.Transaction, error) {
 
 // ProtoToTx converts a protobuf transaction to a go-ethereum transaction.
 // It does not include the AccessList.
-func ProtoToTx(proto *eth.Transaction) *types.Transaction {
+func ProtoToTx(proto *eth.Transaction) *Transaction {
 	to := new(common.Address)
 
 	if len(proto.To) > 0 {
 		to = (*common.Address)(proto.To)
 	}
-	switch proto.Type {
-	case 0:
-		return types.NewTx(&types.LegacyTx{
-			Nonce:    proto.Nonce,
-			GasPrice: big.NewInt(int64(proto.GasPrice)),
-			Gas:      proto.Gas,
-			To:       to,
-			Value:    new(big.Int).SetBytes(proto.Value),
-			Data:     proto.Input,
-			V:        big.NewInt(int64(proto.V)),
-			R:        new(big.Int).SetBytes(proto.R),
-			S:        new(big.Int).SetBytes(proto.S),
-		})
-	case 1:
-		return types.NewTx(&types.AccessListTx{
-			ChainID:  big.NewInt(int64(proto.ChainId)),
-			Nonce:    proto.Nonce,
-			GasPrice: big.NewInt(int64(proto.GasPrice)),
-			Gas:      proto.Gas,
-			To:       to,
-			Value:    new(big.Int).SetBytes(proto.Value),
-			Data:     proto.Input,
-			V:        big.NewInt(int64(proto.V)),
-			R:        new(big.Int).SetBytes(proto.R),
-			S:        new(big.Int).SetBytes(proto.S),
-		})
-	case 2:
-		return types.NewTx(&types.DynamicFeeTx{
-			ChainID:   big.NewInt(int64(proto.ChainId)),
-			Nonce:     proto.Nonce,
-			GasFeeCap: big.NewInt(int64(proto.MaxFee)),
-			GasTipCap: big.NewInt(int64(proto.PriorityFee)),
-			Gas:       proto.Gas,
-			To:        to,
-			Value:     new(big.Int).SetBytes(proto.Value),
-			Data:      proto.Input,
-			V:         big.NewInt(int64(proto.V)),
-			R:         new(big.Int).SetBytes(proto.R),
-			S:         new(big.Int).SetBytes(proto.S),
-		})
-	}
 
-	return nil
+	return &Transaction{
+		ChainID:     proto.ChainId,
+		Nonce:       proto.Nonce,
+		GasPrice:    big.NewInt(int64(proto.GasPrice)),
+		MaxFee:      big.NewInt(int64(proto.MaxFee)),
+		PriorityFee: big.NewInt(int64(proto.PriorityFee)),
+		Gas:         proto.Gas,
+		To:          to,
+		From:        common.BytesToAddress(proto.From),
+		Hash:        common.BytesToHash(proto.Hash),
+		Value:       new(big.Int).SetBytes(proto.Value),
+		Input:       proto.Input,
+		V:           proto.V,
+		R:           proto.R,
+		S:           proto.S,
+	}
 }
