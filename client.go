@@ -281,6 +281,7 @@ func ProtoToTx(proto *eth.Transaction) *Transaction {
 
 	return &Transaction{
 		ChainID:     proto.ChainId,
+		Type:        proto.Type,
 		Nonce:       proto.Nonce,
 		GasPrice:    big.NewInt(int64(proto.GasPrice)),
 		MaxFee:      big.NewInt(int64(proto.MaxFee)),
