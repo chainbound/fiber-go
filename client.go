@@ -195,7 +195,8 @@ func (c *Client) RawBackrunTransaction(ctx context.Context, hash common.Hash, ra
 // channel according to the filter. This function blocks and should be called in a goroutine.
 // If there's an error receiving the new message it will close the channel and return the error.
 func (c *Client) SubscribeNewTxs(filter *api.TxFilter, ch chan<- *Transaction) error {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 
 	if filter == nil {
@@ -219,7 +220,8 @@ func (c *Client) SubscribeNewTxs(filter *api.TxFilter, ch chan<- *Transaction) e
 }
 
 func (c *Client) SubscribeNewBlocks(filter *api.BlockFilter, ch chan<- *eth.Block) error {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 
 	res, err := c.client.SubscribeNewBlocks(ctx, filter)
