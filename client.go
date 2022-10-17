@@ -36,6 +36,7 @@ type Transaction struct {
 	V           uint64
 	R           []byte
 	S           []byte
+	AccessList  types.AccessList
 }
 
 func (tx *Transaction) ToNative() *types.Transaction {
@@ -252,6 +253,23 @@ func TxToProto(tx *types.Transaction) (*eth.Transaction, error) {
 		to = tx.To().Bytes()
 	}
 
+	var acl []*eth.AccessTuple
+	if tx.Type() != 0 {
+		if len(tx.AccessList()) > 0 {
+			acl = make([]*eth.AccessTuple, len(tx.AccessList()))
+			for i, tuple := range tx.AccessList() {
+				acl[i] = &eth.AccessTuple{
+					Address: tuple.Address.Bytes(),
+				}
+
+				storageKeys := make([][]byte, len(tuple.StorageKeys))
+				for j, key := range tuple.StorageKeys {
+					storageKeys[j] = key.Bytes()
+				}
+			}
+		}
+	}
+
 	v, r, s := tx.RawSignatureValues()
 	return &eth.Transaction{
 		ChainId:     uint32(tx.ChainId().Uint64()),
@@ -269,6 +287,7 @@ func TxToProto(tx *types.Transaction) (*eth.Transaction, error) {
 		V:           v.Uint64(),
 		R:           r.Bytes(),
 		S:           s.Bytes(),
+		AccessList:  acl,
 	}, nil
 }
 
@@ -279,6 +298,23 @@ func ProtoToTx(proto *eth.Transaction) *Transaction {
 
 	if len(proto.To) > 0 {
 		to = (*common.Address)(proto.To)
+	}
+
+	var acl []types.AccessTuple
+	if len(proto.AccessList) > 0 {
+		acl = make([]types.AccessTuple, len(proto.AccessList))
+		for i, tuple := range proto.AccessList {
+			storageKeys := make([]common.Hash, len(tuple.StorageKeys))
+
+			for j, key := range tuple.StorageKeys {
+				storageKeys[j] = common.BytesToHash(key)
+			}
+
+			acl[i] = types.AccessTuple{
+				Address:     common.BytesToAddress(tuple.Address),
+				StorageKeys: storageKeys,
+			}
+		}
 	}
 
 	return &Transaction{
@@ -297,5 +333,6 @@ func ProtoToTx(proto *eth.Transaction) *Transaction {
 		V:           proto.V,
 		R:           proto.R,
 		S:           proto.S,
+		AccessList:  acl,
 	}
 }
