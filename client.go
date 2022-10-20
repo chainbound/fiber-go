@@ -90,6 +90,12 @@ type Client struct {
 	conn   *grpc.ClientConn
 	client api.APIClient
 	key    string
+
+	// streams
+	txStream         api.API_SendTransactionStreamClient
+	rawTxStream      api.API_SendRawTransactionStreamClient
+	backrunStream    api.API_BackrunStreamClient
+	rawBackrunStream api.API_RawBackrunStreamClient
 }
 
 func NewClient(target, apiKey string) *Client {
@@ -121,6 +127,28 @@ func (c *Client) Connect(ctx context.Context) error {
 
 	// Create the stub (client) with the channel
 	c.client = api.NewAPIClient(conn)
+
+	ctx = metadata.AppendToOutgoingContext(context.Background(), "x-api-key", c.key)
+	c.txStream, err = c.client.SendTransactionStream(ctx)
+	if err != nil {
+		return err
+	}
+
+	c.rawTxStream, err = c.client.SendRawTransactionStream(ctx)
+	if err != nil {
+		return err
+	}
+
+	c.backrunStream, err = c.client.BackrunStream(ctx)
+	if err != nil {
+		return err
+	}
+
+	c.rawBackrunStream, err = c.client.RawBackrunStream(ctx)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -136,25 +164,51 @@ func (c *Client) SendTransaction(ctx context.Context, tx *types.Transaction) (st
 		return "", 0, fmt.Errorf("converting to protobuf: %w", err)
 	}
 
-	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
+	errc := make(chan error)
+	go func() {
+		if err := c.txStream.Send(proto); err != nil {
+			errc <- err
+		}
+	}()
 
-	res, err := c.client.SendTransaction(ctx, proto)
-	if err != nil {
-		return "", 0, fmt.Errorf("sending tx to api: %w", err)
+	for {
+		select {
+		case err := <-errc:
+			return "", 0, err
+		default:
+		}
+
+		res, err := c.txStream.Recv()
+		if err != nil {
+			return "", 0, err
+		} else {
+			return res.Hash, res.Timestamp, nil
+		}
 	}
-
-	return res.Hash, res.Timestamp, nil
 }
 
 func (c *Client) SendRawTransaction(ctx context.Context, rawTx []byte) (string, int64, error) {
-	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
+	errc := make(chan error)
+	go func() {
+		if err := c.rawTxStream.Send(&api.RawTxMsg{RawTx: rawTx}); err != nil {
+			errc <- err
+		}
+	}()
 
-	res, err := c.client.SendRawTransaction(ctx, &api.RawTxMsg{RawTx: rawTx})
-	if err != nil {
-		return "", 0, fmt.Errorf("sending tx to api: %w", err)
+	for {
+		select {
+		case err := <-errc:
+			return "", 0, err
+		default:
+		}
+
+		res, err := c.rawTxStream.Recv()
+		if err != nil {
+			return "", 0, err
+		} else {
+			return res.Hash, res.Timestamp, nil
+		}
 	}
-
-	return res.Hash, res.Timestamp, nil
 }
 
 func (c *Client) BackrunTransaction(ctx context.Context, hash common.Hash, tx *types.Transaction) (string, int64, error) {
@@ -163,33 +217,57 @@ func (c *Client) BackrunTransaction(ctx context.Context, hash common.Hash, tx *t
 		return "", 0, fmt.Errorf("converting to protobuf: %w", err)
 	}
 
-	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
+	errc := make(chan error)
+	go func() {
+		if err := c.backrunStream.Send(&api.BackrunMsg{
+			Hash: hash.String(),
+			Tx:   proto,
+		}); err != nil {
+			errc <- err
+		}
+	}()
 
-	res, err := c.client.Backrun(ctx, &api.BackrunMsg{
-		Hash: hash.String(),
-		Tx:   proto,
-	})
+	for {
+		select {
+		case err := <-errc:
+			return "", 0, err
+		default:
+		}
 
-	if err != nil {
-		return "", 0, fmt.Errorf("sending backrun to api: %w", err)
+		res, err := c.backrunStream.Recv()
+		if err != nil {
+			return "", 0, err
+		} else {
+			return res.Hash, res.Timestamp, nil
+		}
 	}
-
-	return res.Hash, res.Timestamp, nil
 }
 
 func (c *Client) RawBackrunTransaction(ctx context.Context, hash common.Hash, rawTx []byte) (string, int64, error) {
-	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
+	errc := make(chan error)
+	go func() {
+		if err := c.rawBackrunStream.Send(&api.RawBackrunMsg{
+			Hash:  hash.String(),
+			RawTx: rawTx,
+		}); err != nil {
+			errc <- err
+		}
+	}()
 
-	res, err := c.client.RawBackrun(ctx, &api.RawBackrunMsg{
-		Hash:  hash.Hex(),
-		RawTx: rawTx,
-	})
+	for {
+		select {
+		case err := <-errc:
+			return "", 0, err
+		default:
+		}
 
-	if err != nil {
-		return "", 0, fmt.Errorf("sending raw backrun to api: %w", err)
+		res, err := c.rawBackrunStream.Recv()
+		if err != nil {
+			return "", 0, err
+		} else {
+			return res.Hash, res.Timestamp, nil
+		}
 	}
-
-	return res.Hash, res.Timestamp, nil
 }
 
 // SubscribeNewTxs subscribes to new transactions, and sends transactions on the given
