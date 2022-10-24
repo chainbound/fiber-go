@@ -153,6 +153,10 @@ func (c *Client) Connect(ctx context.Context) error {
 }
 
 func (c *Client) Close() error {
+	c.txStream.CloseSend()
+	c.backrunStream.CloseSend()
+	c.rawTxStream.CloseSend()
+	c.rawBackrunStream.CloseSend()
 	return c.conn.Close()
 }
 
