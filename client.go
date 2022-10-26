@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/chainbound/fiber-go/filter"
 	"github.com/chainbound/fiber-go/protobuf/api"
 	"github.com/chainbound/fiber-go/protobuf/eth"
 
@@ -277,16 +278,17 @@ func (c *Client) RawBackrunTransaction(ctx context.Context, hash common.Hash, ra
 // SubscribeNewTxs subscribes to new transactions, and sends transactions on the given
 // channel according to the filter. This function blocks and should be called in a goroutine.
 // If there's an error receiving the new message it will close the channel and return the error.
-func (c *Client) SubscribeNewTxs(filter *api.TxFilter, ch chan<- *Transaction) error {
+func (c *Client) SubscribeNewTxs(filter *filter.Filter, ch chan<- *Transaction) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 
-	if filter == nil {
-		filter = &api.TxFilter{}
+	protoFilter := &api.TxFilter{}
+	if filter != nil {
+		protoFilter.Encoded = filter.Encode()
 	}
 
-	res, err := c.client.SubscribeNewTxs(ctx, filter)
+	res, err := c.client.SubscribeNewTxs(ctx, protoFilter)
 	if err != nil {
 		return fmt.Errorf("subscribing to api: %w", err)
 	}
