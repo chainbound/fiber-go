@@ -24,6 +24,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type APIClient interface {
 	SubscribeNewTxs(ctx context.Context, in *TxFilter, opts ...grpc.CallOption) (API_SubscribeNewTxsClient, error)
+	SubscribeNewTxsV2(ctx context.Context, in *TxFilterV2, opts ...grpc.CallOption) (API_SubscribeNewTxsV2Client, error)
 	SubscribeNewBlocks(ctx context.Context, in *BlockFilter, opts ...grpc.CallOption) (API_SubscribeNewBlocksClient, error)
 	SendTransaction(ctx context.Context, in *eth.Transaction, opts ...grpc.CallOption) (*TransactionResponse, error)
 	SendRawTransaction(ctx context.Context, in *RawTxMsg, opts ...grpc.CallOption) (*TransactionResponse, error)
@@ -77,8 +78,40 @@ func (x *aPISubscribeNewTxsClient) Recv() (*eth.Transaction, error) {
 	return m, nil
 }
 
+func (c *aPIClient) SubscribeNewTxsV2(ctx context.Context, in *TxFilterV2, opts ...grpc.CallOption) (API_SubscribeNewTxsV2Client, error) {
+	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[1], "/api.API/SubscribeNewTxsV2", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &aPISubscribeNewTxsV2Client{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type API_SubscribeNewTxsV2Client interface {
+	Recv() (*eth.Transaction, error)
+	grpc.ClientStream
+}
+
+type aPISubscribeNewTxsV2Client struct {
+	grpc.ClientStream
+}
+
+func (x *aPISubscribeNewTxsV2Client) Recv() (*eth.Transaction, error) {
+	m := new(eth.Transaction)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *aPIClient) SubscribeNewBlocks(ctx context.Context, in *BlockFilter, opts ...grpc.CallOption) (API_SubscribeNewBlocksClient, error) {
-	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[1], "/api.API/SubscribeNewBlocks", opts...)
+	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[2], "/api.API/SubscribeNewBlocks", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +179,7 @@ func (c *aPIClient) RawBackrun(ctx context.Context, in *RawBackrunMsg, opts ...g
 }
 
 func (c *aPIClient) SendTransactionStream(ctx context.Context, opts ...grpc.CallOption) (API_SendTransactionStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[2], "/api.API/SendTransactionStream", opts...)
+	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[3], "/api.API/SendTransactionStream", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +210,7 @@ func (x *aPISendTransactionStreamClient) Recv() (*TransactionResponse, error) {
 }
 
 func (c *aPIClient) SendRawTransactionStream(ctx context.Context, opts ...grpc.CallOption) (API_SendRawTransactionStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[3], "/api.API/SendRawTransactionStream", opts...)
+	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[4], "/api.API/SendRawTransactionStream", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +241,7 @@ func (x *aPISendRawTransactionStreamClient) Recv() (*TransactionResponse, error)
 }
 
 func (c *aPIClient) BackrunStream(ctx context.Context, opts ...grpc.CallOption) (API_BackrunStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[4], "/api.API/BackrunStream", opts...)
+	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[5], "/api.API/BackrunStream", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +272,7 @@ func (x *aPIBackrunStreamClient) Recv() (*TransactionResponse, error) {
 }
 
 func (c *aPIClient) RawBackrunStream(ctx context.Context, opts ...grpc.CallOption) (API_RawBackrunStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[5], "/api.API/RawBackrunStream", opts...)
+	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[6], "/api.API/RawBackrunStream", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -274,6 +307,7 @@ func (x *aPIRawBackrunStreamClient) Recv() (*TransactionResponse, error) {
 // for forward compatibility
 type APIServer interface {
 	SubscribeNewTxs(*TxFilter, API_SubscribeNewTxsServer) error
+	SubscribeNewTxsV2(*TxFilterV2, API_SubscribeNewTxsV2Server) error
 	SubscribeNewBlocks(*BlockFilter, API_SubscribeNewBlocksServer) error
 	SendTransaction(context.Context, *eth.Transaction) (*TransactionResponse, error)
 	SendRawTransaction(context.Context, *RawTxMsg) (*TransactionResponse, error)
@@ -294,6 +328,9 @@ type UnimplementedAPIServer struct {
 
 func (UnimplementedAPIServer) SubscribeNewTxs(*TxFilter, API_SubscribeNewTxsServer) error {
 	return status.Errorf(codes.Unimplemented, "method SubscribeNewTxs not implemented")
+}
+func (UnimplementedAPIServer) SubscribeNewTxsV2(*TxFilterV2, API_SubscribeNewTxsV2Server) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeNewTxsV2 not implemented")
 }
 func (UnimplementedAPIServer) SubscribeNewBlocks(*BlockFilter, API_SubscribeNewBlocksServer) error {
 	return status.Errorf(codes.Unimplemented, "method SubscribeNewBlocks not implemented")
@@ -353,6 +390,27 @@ type aPISubscribeNewTxsServer struct {
 }
 
 func (x *aPISubscribeNewTxsServer) Send(m *eth.Transaction) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _API_SubscribeNewTxsV2_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(TxFilterV2)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(APIServer).SubscribeNewTxsV2(m, &aPISubscribeNewTxsV2Server{stream})
+}
+
+type API_SubscribeNewTxsV2Server interface {
+	Send(*eth.Transaction) error
+	grpc.ServerStream
+}
+
+type aPISubscribeNewTxsV2Server struct {
+	grpc.ServerStream
+}
+
+func (x *aPISubscribeNewTxsV2Server) Send(m *eth.Transaction) error {
 	return x.ServerStream.SendMsg(m)
 }
 
@@ -581,6 +639,11 @@ var API_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "SubscribeNewTxs",
 			Handler:       _API_SubscribeNewTxs_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "SubscribeNewTxsV2",
+			Handler:       _API_SubscribeNewTxsV2_Handler,
 			ServerStreams: true,
 		},
 		{

@@ -283,12 +283,12 @@ func (c *Client) SubscribeNewTxs(filter *filter.Filter, ch chan<- *Transaction) 
 	defer cancel()
 	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 
-	protoFilter := &api.TxFilter{}
+	protoFilter := &api.TxFilterV2{}
 	if filter != nil {
 		protoFilter.Encoded = filter.Encode()
 	}
 
-	res, err := c.client.SubscribeNewTxs(ctx, protoFilter)
+	res, err := c.client.SubscribeNewTxsV2(ctx, protoFilter)
 	if err != nil {
 		return fmt.Errorf("subscribing to api: %w", err)
 	}

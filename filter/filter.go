@@ -25,7 +25,7 @@ type Filter struct {
 	Root *Node
 }
 
-func NewFilter(ops ...FilterOp) *Filter {
+func New(ops ...FilterOp) *Filter {
 	f := &Filter{}
 
 	for _, op := range ops {
@@ -101,52 +101,52 @@ func Or(opts ...FilterOp) FilterOp {
 }
 
 // Operands
-func To(to common.Address) FilterOp {
+func To(to string) FilterOp {
 	return func(f *Filter, n *Node) {
 		var new *Node
 		if n == nil {
 			new = &Node{
-				Operand: &FilterKV{"to", to.Bytes()},
+				Operand: &FilterKV{"to", common.HexToAddress(to).Bytes()},
 			}
 
 			f.Root = new
 		} else {
 			n.Nodes = append(n.Nodes, &Node{
-				Operand: &FilterKV{"to", to.Bytes()},
+				Operand: &FilterKV{"to", common.HexToAddress(to).Bytes()},
 			})
 		}
 	}
 }
 
-func From(from common.Address) FilterOp {
+func From(from string) FilterOp {
 	return func(f *Filter, n *Node) {
 		var new *Node
 		if n == nil {
 			new = &Node{
-				Operand: &FilterKV{"from", from.Bytes()},
+				Operand: &FilterKV{"from", common.HexToAddress(from).Bytes()},
 			}
 
 			f.Root = new
 		} else {
 			n.Nodes = append(n.Nodes, &Node{
-				Operand: &FilterKV{"from", from.Bytes()},
+				Operand: &FilterKV{"from", common.HexToAddress(from).Bytes()},
 			})
 		}
 	}
 }
 
-func MethodID(id []byte) FilterOp {
+func MethodID(id string) FilterOp {
 	return func(f *Filter, n *Node) {
 		var new *Node
 		if n == nil {
 			new = &Node{
-				Operand: &FilterKV{"method", id},
+				Operand: &FilterKV{"method", common.FromHex(id)},
 			}
 
 			f.Root = new
 		} else {
 			n.Nodes = append(n.Nodes, &Node{
-				Operand: &FilterKV{"method", id},
+				Operand: &FilterKV{"method", common.FromHex(id)},
 			})
 		}
 	}
