@@ -52,7 +52,7 @@ func (kv FilterKV) String() string {
 type FilterOp func(*Filter, *Node)
 
 // Operators
-func And(opts ...FilterOp) FilterOp {
+func And(ops ...FilterOp) FilterOp {
 	return func(f *Filter, n *Node) {
 		// If we're at the first node (empty)
 		var new *Node
@@ -70,13 +70,13 @@ func And(opts ...FilterOp) FilterOp {
 			n.Nodes = append(n.Nodes, new)
 		}
 
-		for _, op := range opts {
+		for _, op := range ops {
 			op(f, new)
 		}
 	}
 }
 
-func Or(opts ...FilterOp) FilterOp {
+func Or(ops ...FilterOp) FilterOp {
 	return func(f *Filter, n *Node) {
 		// If we're at the first node (empty)
 		var new *Node
@@ -94,7 +94,7 @@ func Or(opts ...FilterOp) FilterOp {
 			n.Nodes = append(n.Nodes, new)
 		}
 
-		for _, op := range opts {
+		for _, op := range ops {
 			op(f, new)
 		}
 	}
