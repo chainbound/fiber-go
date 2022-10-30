@@ -32,12 +32,8 @@ func main() {
 ```
 
 ### Subscriptions
-You can find some examples on how to subscribe to the various subscriptions below. `fiber-go` uses it's own
+You can find some examples on how to subscribe below. `fiber-go` uses it's own
 `Transaction` struct, which you can convert to a `go-ethereum` transaction using `tx.ToNative()`.
-
-Filtering is currently in progress. The filter object passed to `SubscribeNewTxs` is a simple **OR** filter, so
-if a transaction matches either to `To`, `From` or `MethodID` field, it will be sent on the stream. If you don't want
-any filtering, you can pass `nil`.
 #### Transactions
 ```go
 import (
