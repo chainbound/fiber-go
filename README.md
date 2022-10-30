@@ -46,6 +46,7 @@ import (
     "time"
     
     fiber "github.com/chainbound/fiber-go"
+    "github.com/chainbound/fiber-go/filter"
     "github.com/chainbound/fiber-go/protobuf/api"
 
     "github.com/ethereum/go-ethereum/core/types"
@@ -65,10 +66,7 @@ func main() {
 
     ch := make(chan *types.Transaction)
     go func() {
-        if err := client.SubscribeNewTxs(&api.TxFilter{
-			To: common.HexToAddress("0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D").Bytes(),
-			MethodID: common.Hex2Bytes("7ff36ab5"),
-        }, ch); err != nil {
+        if err := client.SubscribeNewTxs(nil, ch); err != nil {
             log.Fatal(err)
         }
     }()
@@ -78,8 +76,38 @@ func main() {
     }
 }
 ```
-#### Blocks
+
+#### Filtering
+The first argument to `SubscribeNewTxs` is a filter, which can be `nil` if you want to get all transactions.
+A filter can be built with the `filter` package:
 ```go
+import (
+    ...
+    "github.com/chainbound/fiber-go/filter"
+)
+
+func main() {
+    ...
+
+    // Construct filter
+	f := filter.New(filter.Or(
+		filter.To("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+		filter.To("0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"),
+	))
+
+    ch := make(chan *types.Transaction)
+    go func() {
+        if err := client.SubscribeNewTxs(f, ch); err != nil {
+            log.Fatal(err)
+        }
+    }()
+
+    ...
+}
+```
+#### Blocks
+WIP
+<!-- ```go
 import (
     "context"
     "log"
@@ -104,7 +132,7 @@ func main() {
 
     ch := make(chan *eth.Block)
     go func() {
-        if err := client.SubscribeNewBlocks(&api.BlockFilter{}, ch); err != nil {
+        if err := client.SubscribeNewBlocks(nil, ch); err != nil {
             log.Fatal(err)
         }
     }()
@@ -113,7 +141,7 @@ func main() {
         handleBlock(tx)
     }
 }
-```
+``` -->
 
 ### Sending Transactions
 #### `SendTransaction`
