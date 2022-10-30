@@ -90,10 +90,10 @@ func main() {
     ...
 
     // Construct filter
-	f := filter.New(filter.Or(
-		filter.To("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
-		filter.To("0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"),
-	))
+    f := filter.New(filter.Or(
+        filter.To("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+        filter.To("0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"),
+    ))
 
     ch := make(chan *types.Transaction)
     go func() {
