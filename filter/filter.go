@@ -25,12 +25,10 @@ type Filter struct {
 	Root *Node
 }
 
-func New(ops ...FilterOp) *Filter {
+func New(rootOp FilterOp) *Filter {
 	f := &Filter{}
 
-	for _, op := range ops {
-		op(f, nil)
-	}
+	rootOp(f, nil)
 
 	return f
 }
