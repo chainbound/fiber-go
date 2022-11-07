@@ -114,8 +114,7 @@ func (c *Client) Connect(ctx context.Context) error {
 		grpc.WithBlock(),
 		// Make sure the connection is kept alive
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time:                time.Second * 20,
-			PermitWithoutStream: true,
+			Time: time.Second * 120,
 		}),
 		grpc.WithReadBufferSize(0),
 		grpc.WithWriteBufferSize(0),
