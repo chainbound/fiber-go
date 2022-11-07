@@ -44,8 +44,6 @@ import (
     fiber "github.com/chainbound/fiber-go"
     "github.com/chainbound/fiber-go/filter"
     "github.com/chainbound/fiber-go/protobuf/api"
-
-    "github.com/ethereum/go-ethereum/core/types"
 )
 
 func main() {
@@ -60,7 +58,7 @@ func main() {
         log.Fatal(err)
     }
 
-    ch := make(chan *types.Transaction)
+    ch := make(chan *fiber.Transaction)
     go func() {
         if err := client.SubscribeNewTxs(nil, ch); err != nil {
             log.Fatal(err)
@@ -104,7 +102,7 @@ func main() {
         ),
     ))
 
-    ch := make(chan *types.Transaction)
+    ch := make(chan *fiber.Transaction)
     go func() {
         // apply filter
         if err := client.SubscribeNewTxs(f, ch); err != nil {
