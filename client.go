@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"time"
 
 	"github.com/chainbound/fiber-go/filter"
 	"github.com/chainbound/fiber-go/protobuf/api"
@@ -17,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -112,10 +110,6 @@ func (c *Client) Connect(ctx context.Context) error {
 	conn, err := grpc.DialContext(ctx, c.target,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
-		// Make sure the connection is kept alive
-		grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time: time.Second * 120,
-		}),
 		grpc.WithReadBufferSize(0),
 		grpc.WithWriteBufferSize(0),
 	)
