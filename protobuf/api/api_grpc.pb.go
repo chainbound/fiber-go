@@ -24,18 +24,10 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type APIClient interface {
 	SubscribeNewTxs(ctx context.Context, in *TxFilter, opts ...grpc.CallOption) (API_SubscribeNewTxsClient, error)
-	SubscribeNewTxsV2(ctx context.Context, in *TxFilterV2, opts ...grpc.CallOption) (API_SubscribeNewTxsV2Client, error)
-	SubscribeNewBlocks(ctx context.Context, in *BlockFilter, opts ...grpc.CallOption) (API_SubscribeNewBlocksClient, error)
-	SendTransaction(ctx context.Context, in *eth.Transaction, opts ...grpc.CallOption) (*TransactionResponse, error)
-	SendRawTransaction(ctx context.Context, in *RawTxMsg, opts ...grpc.CallOption) (*TransactionResponse, error)
-	// Backrun is the RPC method for backrunning a transaction.
-	Backrun(ctx context.Context, in *BackrunMsg, opts ...grpc.CallOption) (*TransactionResponse, error)
-	RawBackrun(ctx context.Context, in *RawBackrunMsg, opts ...grpc.CallOption) (*TransactionResponse, error)
-	SendTransactionStream(ctx context.Context, opts ...grpc.CallOption) (API_SendTransactionStreamClient, error)
-	SendRawTransactionStream(ctx context.Context, opts ...grpc.CallOption) (API_SendRawTransactionStreamClient, error)
-	// Backrun is the RPC method for backrunning a transaction.
-	BackrunStream(ctx context.Context, opts ...grpc.CallOption) (API_BackrunStreamClient, error)
-	RawBackrunStream(ctx context.Context, opts ...grpc.CallOption) (API_RawBackrunStreamClient, error)
+	SendTransaction(ctx context.Context, opts ...grpc.CallOption) (API_SendTransactionClient, error)
+	SendRawTransaction(ctx context.Context, opts ...grpc.CallOption) (API_SendRawTransactionClient, error)
+	SendTransactionSequence(ctx context.Context, opts ...grpc.CallOption) (API_SendTransactionSequenceClient, error)
+	SendRawTransactionSequence(ctx context.Context, opts ...grpc.CallOption) (API_SendRawTransactionSequenceClient, error)
 }
 
 type aPIClient struct {
@@ -78,130 +70,30 @@ func (x *aPISubscribeNewTxsClient) Recv() (*eth.Transaction, error) {
 	return m, nil
 }
 
-func (c *aPIClient) SubscribeNewTxsV2(ctx context.Context, in *TxFilterV2, opts ...grpc.CallOption) (API_SubscribeNewTxsV2Client, error) {
-	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[1], "/api.API/SubscribeNewTxsV2", opts...)
+func (c *aPIClient) SendTransaction(ctx context.Context, opts ...grpc.CallOption) (API_SendTransactionClient, error) {
+	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[1], "/api.API/SendTransaction", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &aPISubscribeNewTxsV2Client{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
+	x := &aPISendTransactionClient{stream}
 	return x, nil
 }
 
-type API_SubscribeNewTxsV2Client interface {
-	Recv() (*eth.Transaction, error)
-	grpc.ClientStream
-}
-
-type aPISubscribeNewTxsV2Client struct {
-	grpc.ClientStream
-}
-
-func (x *aPISubscribeNewTxsV2Client) Recv() (*eth.Transaction, error) {
-	m := new(eth.Transaction)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *aPIClient) SubscribeNewBlocks(ctx context.Context, in *BlockFilter, opts ...grpc.CallOption) (API_SubscribeNewBlocksClient, error) {
-	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[2], "/api.API/SubscribeNewBlocks", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &aPISubscribeNewBlocksClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type API_SubscribeNewBlocksClient interface {
-	Recv() (*eth.Block, error)
-	grpc.ClientStream
-}
-
-type aPISubscribeNewBlocksClient struct {
-	grpc.ClientStream
-}
-
-func (x *aPISubscribeNewBlocksClient) Recv() (*eth.Block, error) {
-	m := new(eth.Block)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *aPIClient) SendTransaction(ctx context.Context, in *eth.Transaction, opts ...grpc.CallOption) (*TransactionResponse, error) {
-	out := new(TransactionResponse)
-	err := c.cc.Invoke(ctx, "/api.API/SendTransaction", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *aPIClient) SendRawTransaction(ctx context.Context, in *RawTxMsg, opts ...grpc.CallOption) (*TransactionResponse, error) {
-	out := new(TransactionResponse)
-	err := c.cc.Invoke(ctx, "/api.API/SendRawTransaction", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *aPIClient) Backrun(ctx context.Context, in *BackrunMsg, opts ...grpc.CallOption) (*TransactionResponse, error) {
-	out := new(TransactionResponse)
-	err := c.cc.Invoke(ctx, "/api.API/Backrun", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *aPIClient) RawBackrun(ctx context.Context, in *RawBackrunMsg, opts ...grpc.CallOption) (*TransactionResponse, error) {
-	out := new(TransactionResponse)
-	err := c.cc.Invoke(ctx, "/api.API/RawBackrun", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *aPIClient) SendTransactionStream(ctx context.Context, opts ...grpc.CallOption) (API_SendTransactionStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[3], "/api.API/SendTransactionStream", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &aPISendTransactionStreamClient{stream}
-	return x, nil
-}
-
-type API_SendTransactionStreamClient interface {
+type API_SendTransactionClient interface {
 	Send(*eth.Transaction) error
 	Recv() (*TransactionResponse, error)
 	grpc.ClientStream
 }
 
-type aPISendTransactionStreamClient struct {
+type aPISendTransactionClient struct {
 	grpc.ClientStream
 }
 
-func (x *aPISendTransactionStreamClient) Send(m *eth.Transaction) error {
+func (x *aPISendTransactionClient) Send(m *eth.Transaction) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *aPISendTransactionStreamClient) Recv() (*TransactionResponse, error) {
+func (x *aPISendTransactionClient) Recv() (*TransactionResponse, error) {
 	m := new(TransactionResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -209,30 +101,30 @@ func (x *aPISendTransactionStreamClient) Recv() (*TransactionResponse, error) {
 	return m, nil
 }
 
-func (c *aPIClient) SendRawTransactionStream(ctx context.Context, opts ...grpc.CallOption) (API_SendRawTransactionStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[4], "/api.API/SendRawTransactionStream", opts...)
+func (c *aPIClient) SendRawTransaction(ctx context.Context, opts ...grpc.CallOption) (API_SendRawTransactionClient, error) {
+	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[2], "/api.API/SendRawTransaction", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &aPISendRawTransactionStreamClient{stream}
+	x := &aPISendRawTransactionClient{stream}
 	return x, nil
 }
 
-type API_SendRawTransactionStreamClient interface {
+type API_SendRawTransactionClient interface {
 	Send(*RawTxMsg) error
 	Recv() (*TransactionResponse, error)
 	grpc.ClientStream
 }
 
-type aPISendRawTransactionStreamClient struct {
+type aPISendRawTransactionClient struct {
 	grpc.ClientStream
 }
 
-func (x *aPISendRawTransactionStreamClient) Send(m *RawTxMsg) error {
+func (x *aPISendRawTransactionClient) Send(m *RawTxMsg) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *aPISendRawTransactionStreamClient) Recv() (*TransactionResponse, error) {
+func (x *aPISendRawTransactionClient) Recv() (*TransactionResponse, error) {
 	m := new(TransactionResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -240,62 +132,62 @@ func (x *aPISendRawTransactionStreamClient) Recv() (*TransactionResponse, error)
 	return m, nil
 }
 
-func (c *aPIClient) BackrunStream(ctx context.Context, opts ...grpc.CallOption) (API_BackrunStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[5], "/api.API/BackrunStream", opts...)
+func (c *aPIClient) SendTransactionSequence(ctx context.Context, opts ...grpc.CallOption) (API_SendTransactionSequenceClient, error) {
+	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[3], "/api.API/SendTransactionSequence", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &aPIBackrunStreamClient{stream}
+	x := &aPISendTransactionSequenceClient{stream}
 	return x, nil
 }
 
-type API_BackrunStreamClient interface {
-	Send(*BackrunMsg) error
-	Recv() (*TransactionResponse, error)
+type API_SendTransactionSequenceClient interface {
+	Send(*TxSequenceMsg) error
+	Recv() (*TxSequenceResponse, error)
 	grpc.ClientStream
 }
 
-type aPIBackrunStreamClient struct {
+type aPISendTransactionSequenceClient struct {
 	grpc.ClientStream
 }
 
-func (x *aPIBackrunStreamClient) Send(m *BackrunMsg) error {
+func (x *aPISendTransactionSequenceClient) Send(m *TxSequenceMsg) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *aPIBackrunStreamClient) Recv() (*TransactionResponse, error) {
-	m := new(TransactionResponse)
+func (x *aPISendTransactionSequenceClient) Recv() (*TxSequenceResponse, error) {
+	m := new(TxSequenceResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-func (c *aPIClient) RawBackrunStream(ctx context.Context, opts ...grpc.CallOption) (API_RawBackrunStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[6], "/api.API/RawBackrunStream", opts...)
+func (c *aPIClient) SendRawTransactionSequence(ctx context.Context, opts ...grpc.CallOption) (API_SendRawTransactionSequenceClient, error) {
+	stream, err := c.cc.NewStream(ctx, &API_ServiceDesc.Streams[4], "/api.API/SendRawTransactionSequence", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &aPIRawBackrunStreamClient{stream}
+	x := &aPISendRawTransactionSequenceClient{stream}
 	return x, nil
 }
 
-type API_RawBackrunStreamClient interface {
-	Send(*RawBackrunMsg) error
-	Recv() (*TransactionResponse, error)
+type API_SendRawTransactionSequenceClient interface {
+	Send(*RawTxSequenceMsg) error
+	Recv() (*TxSequenceResponse, error)
 	grpc.ClientStream
 }
 
-type aPIRawBackrunStreamClient struct {
+type aPISendRawTransactionSequenceClient struct {
 	grpc.ClientStream
 }
 
-func (x *aPIRawBackrunStreamClient) Send(m *RawBackrunMsg) error {
+func (x *aPISendRawTransactionSequenceClient) Send(m *RawTxSequenceMsg) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *aPIRawBackrunStreamClient) Recv() (*TransactionResponse, error) {
-	m := new(TransactionResponse)
+func (x *aPISendRawTransactionSequenceClient) Recv() (*TxSequenceResponse, error) {
+	m := new(TxSequenceResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -307,18 +199,10 @@ func (x *aPIRawBackrunStreamClient) Recv() (*TransactionResponse, error) {
 // for forward compatibility
 type APIServer interface {
 	SubscribeNewTxs(*TxFilter, API_SubscribeNewTxsServer) error
-	SubscribeNewTxsV2(*TxFilterV2, API_SubscribeNewTxsV2Server) error
-	SubscribeNewBlocks(*BlockFilter, API_SubscribeNewBlocksServer) error
-	SendTransaction(context.Context, *eth.Transaction) (*TransactionResponse, error)
-	SendRawTransaction(context.Context, *RawTxMsg) (*TransactionResponse, error)
-	// Backrun is the RPC method for backrunning a transaction.
-	Backrun(context.Context, *BackrunMsg) (*TransactionResponse, error)
-	RawBackrun(context.Context, *RawBackrunMsg) (*TransactionResponse, error)
-	SendTransactionStream(API_SendTransactionStreamServer) error
-	SendRawTransactionStream(API_SendRawTransactionStreamServer) error
-	// Backrun is the RPC method for backrunning a transaction.
-	BackrunStream(API_BackrunStreamServer) error
-	RawBackrunStream(API_RawBackrunStreamServer) error
+	SendTransaction(API_SendTransactionServer) error
+	SendRawTransaction(API_SendRawTransactionServer) error
+	SendTransactionSequence(API_SendTransactionSequenceServer) error
+	SendRawTransactionSequence(API_SendRawTransactionSequenceServer) error
 	mustEmbedUnimplementedAPIServer()
 }
 
@@ -329,35 +213,17 @@ type UnimplementedAPIServer struct {
 func (UnimplementedAPIServer) SubscribeNewTxs(*TxFilter, API_SubscribeNewTxsServer) error {
 	return status.Errorf(codes.Unimplemented, "method SubscribeNewTxs not implemented")
 }
-func (UnimplementedAPIServer) SubscribeNewTxsV2(*TxFilterV2, API_SubscribeNewTxsV2Server) error {
-	return status.Errorf(codes.Unimplemented, "method SubscribeNewTxsV2 not implemented")
+func (UnimplementedAPIServer) SendTransaction(API_SendTransactionServer) error {
+	return status.Errorf(codes.Unimplemented, "method SendTransaction not implemented")
 }
-func (UnimplementedAPIServer) SubscribeNewBlocks(*BlockFilter, API_SubscribeNewBlocksServer) error {
-	return status.Errorf(codes.Unimplemented, "method SubscribeNewBlocks not implemented")
+func (UnimplementedAPIServer) SendRawTransaction(API_SendRawTransactionServer) error {
+	return status.Errorf(codes.Unimplemented, "method SendRawTransaction not implemented")
 }
-func (UnimplementedAPIServer) SendTransaction(context.Context, *eth.Transaction) (*TransactionResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SendTransaction not implemented")
+func (UnimplementedAPIServer) SendTransactionSequence(API_SendTransactionSequenceServer) error {
+	return status.Errorf(codes.Unimplemented, "method SendTransactionSequence not implemented")
 }
-func (UnimplementedAPIServer) SendRawTransaction(context.Context, *RawTxMsg) (*TransactionResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SendRawTransaction not implemented")
-}
-func (UnimplementedAPIServer) Backrun(context.Context, *BackrunMsg) (*TransactionResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Backrun not implemented")
-}
-func (UnimplementedAPIServer) RawBackrun(context.Context, *RawBackrunMsg) (*TransactionResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RawBackrun not implemented")
-}
-func (UnimplementedAPIServer) SendTransactionStream(API_SendTransactionStreamServer) error {
-	return status.Errorf(codes.Unimplemented, "method SendTransactionStream not implemented")
-}
-func (UnimplementedAPIServer) SendRawTransactionStream(API_SendRawTransactionStreamServer) error {
-	return status.Errorf(codes.Unimplemented, "method SendRawTransactionStream not implemented")
-}
-func (UnimplementedAPIServer) BackrunStream(API_BackrunStreamServer) error {
-	return status.Errorf(codes.Unimplemented, "method BackrunStream not implemented")
-}
-func (UnimplementedAPIServer) RawBackrunStream(API_RawBackrunStreamServer) error {
-	return status.Errorf(codes.Unimplemented, "method RawBackrunStream not implemented")
+func (UnimplementedAPIServer) SendRawTransactionSequence(API_SendRawTransactionSequenceServer) error {
+	return status.Errorf(codes.Unimplemented, "method SendRawTransactionSequence not implemented")
 }
 func (UnimplementedAPIServer) mustEmbedUnimplementedAPIServer() {}
 
@@ -393,139 +259,25 @@ func (x *aPISubscribeNewTxsServer) Send(m *eth.Transaction) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _API_SubscribeNewTxsV2_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(TxFilterV2)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(APIServer).SubscribeNewTxsV2(m, &aPISubscribeNewTxsV2Server{stream})
+func _API_SendTransaction_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(APIServer).SendTransaction(&aPISendTransactionServer{stream})
 }
 
-type API_SubscribeNewTxsV2Server interface {
-	Send(*eth.Transaction) error
-	grpc.ServerStream
-}
-
-type aPISubscribeNewTxsV2Server struct {
-	grpc.ServerStream
-}
-
-func (x *aPISubscribeNewTxsV2Server) Send(m *eth.Transaction) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _API_SubscribeNewBlocks_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(BlockFilter)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(APIServer).SubscribeNewBlocks(m, &aPISubscribeNewBlocksServer{stream})
-}
-
-type API_SubscribeNewBlocksServer interface {
-	Send(*eth.Block) error
-	grpc.ServerStream
-}
-
-type aPISubscribeNewBlocksServer struct {
-	grpc.ServerStream
-}
-
-func (x *aPISubscribeNewBlocksServer) Send(m *eth.Block) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _API_SendTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(eth.Transaction)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(APIServer).SendTransaction(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/api.API/SendTransaction",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(APIServer).SendTransaction(ctx, req.(*eth.Transaction))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _API_SendRawTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RawTxMsg)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(APIServer).SendRawTransaction(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/api.API/SendRawTransaction",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(APIServer).SendRawTransaction(ctx, req.(*RawTxMsg))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _API_Backrun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(BackrunMsg)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(APIServer).Backrun(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/api.API/Backrun",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(APIServer).Backrun(ctx, req.(*BackrunMsg))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _API_RawBackrun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RawBackrunMsg)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(APIServer).RawBackrun(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/api.API/RawBackrun",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(APIServer).RawBackrun(ctx, req.(*RawBackrunMsg))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _API_SendTransactionStream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(APIServer).SendTransactionStream(&aPISendTransactionStreamServer{stream})
-}
-
-type API_SendTransactionStreamServer interface {
+type API_SendTransactionServer interface {
 	Send(*TransactionResponse) error
 	Recv() (*eth.Transaction, error)
 	grpc.ServerStream
 }
 
-type aPISendTransactionStreamServer struct {
+type aPISendTransactionServer struct {
 	grpc.ServerStream
 }
 
-func (x *aPISendTransactionStreamServer) Send(m *TransactionResponse) error {
+func (x *aPISendTransactionServer) Send(m *TransactionResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *aPISendTransactionStreamServer) Recv() (*eth.Transaction, error) {
+func (x *aPISendTransactionServer) Recv() (*eth.Transaction, error) {
 	m := new(eth.Transaction)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -533,25 +285,25 @@ func (x *aPISendTransactionStreamServer) Recv() (*eth.Transaction, error) {
 	return m, nil
 }
 
-func _API_SendRawTransactionStream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(APIServer).SendRawTransactionStream(&aPISendRawTransactionStreamServer{stream})
+func _API_SendRawTransaction_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(APIServer).SendRawTransaction(&aPISendRawTransactionServer{stream})
 }
 
-type API_SendRawTransactionStreamServer interface {
+type API_SendRawTransactionServer interface {
 	Send(*TransactionResponse) error
 	Recv() (*RawTxMsg, error)
 	grpc.ServerStream
 }
 
-type aPISendRawTransactionStreamServer struct {
+type aPISendRawTransactionServer struct {
 	grpc.ServerStream
 }
 
-func (x *aPISendRawTransactionStreamServer) Send(m *TransactionResponse) error {
+func (x *aPISendRawTransactionServer) Send(m *TransactionResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *aPISendRawTransactionStreamServer) Recv() (*RawTxMsg, error) {
+func (x *aPISendRawTransactionServer) Recv() (*RawTxMsg, error) {
 	m := new(RawTxMsg)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -559,52 +311,52 @@ func (x *aPISendRawTransactionStreamServer) Recv() (*RawTxMsg, error) {
 	return m, nil
 }
 
-func _API_BackrunStream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(APIServer).BackrunStream(&aPIBackrunStreamServer{stream})
+func _API_SendTransactionSequence_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(APIServer).SendTransactionSequence(&aPISendTransactionSequenceServer{stream})
 }
 
-type API_BackrunStreamServer interface {
-	Send(*TransactionResponse) error
-	Recv() (*BackrunMsg, error)
+type API_SendTransactionSequenceServer interface {
+	Send(*TxSequenceResponse) error
+	Recv() (*TxSequenceMsg, error)
 	grpc.ServerStream
 }
 
-type aPIBackrunStreamServer struct {
+type aPISendTransactionSequenceServer struct {
 	grpc.ServerStream
 }
 
-func (x *aPIBackrunStreamServer) Send(m *TransactionResponse) error {
+func (x *aPISendTransactionSequenceServer) Send(m *TxSequenceResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *aPIBackrunStreamServer) Recv() (*BackrunMsg, error) {
-	m := new(BackrunMsg)
+func (x *aPISendTransactionSequenceServer) Recv() (*TxSequenceMsg, error) {
+	m := new(TxSequenceMsg)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-func _API_RawBackrunStream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(APIServer).RawBackrunStream(&aPIRawBackrunStreamServer{stream})
+func _API_SendRawTransactionSequence_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(APIServer).SendRawTransactionSequence(&aPISendRawTransactionSequenceServer{stream})
 }
 
-type API_RawBackrunStreamServer interface {
-	Send(*TransactionResponse) error
-	Recv() (*RawBackrunMsg, error)
+type API_SendRawTransactionSequenceServer interface {
+	Send(*TxSequenceResponse) error
+	Recv() (*RawTxSequenceMsg, error)
 	grpc.ServerStream
 }
 
-type aPIRawBackrunStreamServer struct {
+type aPISendRawTransactionSequenceServer struct {
 	grpc.ServerStream
 }
 
-func (x *aPIRawBackrunStreamServer) Send(m *TransactionResponse) error {
+func (x *aPISendRawTransactionSequenceServer) Send(m *TxSequenceResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *aPIRawBackrunStreamServer) Recv() (*RawBackrunMsg, error) {
-	m := new(RawBackrunMsg)
+func (x *aPISendRawTransactionSequenceServer) Recv() (*RawTxSequenceMsg, error) {
+	m := new(RawTxSequenceMsg)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -617,24 +369,7 @@ func (x *aPIRawBackrunStreamServer) Recv() (*RawBackrunMsg, error) {
 var API_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "api.API",
 	HandlerType: (*APIServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "SendTransaction",
-			Handler:    _API_SendTransaction_Handler,
-		},
-		{
-			MethodName: "SendRawTransaction",
-			Handler:    _API_SendRawTransaction_Handler,
-		},
-		{
-			MethodName: "Backrun",
-			Handler:    _API_Backrun_Handler,
-		},
-		{
-			MethodName: "RawBackrun",
-			Handler:    _API_RawBackrun_Handler,
-		},
-	},
+	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "SubscribeNewTxs",
@@ -642,36 +377,26 @@ var API_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "SubscribeNewTxsV2",
-			Handler:       _API_SubscribeNewTxsV2_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "SubscribeNewBlocks",
-			Handler:       _API_SubscribeNewBlocks_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "SendTransactionStream",
-			Handler:       _API_SendTransactionStream_Handler,
+			StreamName:    "SendTransaction",
+			Handler:       _API_SendTransaction_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},
 		{
-			StreamName:    "SendRawTransactionStream",
-			Handler:       _API_SendRawTransactionStream_Handler,
+			StreamName:    "SendRawTransaction",
+			Handler:       _API_SendRawTransaction_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},
 		{
-			StreamName:    "BackrunStream",
-			Handler:       _API_BackrunStream_Handler,
+			StreamName:    "SendTransactionSequence",
+			Handler:       _API_SendTransactionSequence_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},
 		{
-			StreamName:    "RawBackrunStream",
-			Handler:       _API_RawBackrunStream_Handler,
+			StreamName:    "SendRawTransactionSequence",
+			Handler:       _API_SendRawTransactionSequence_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},

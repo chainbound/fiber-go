@@ -93,10 +93,10 @@ type Client struct {
 	key    string
 
 	// streams
-	txStream         api.API_SendTransactionStreamClient
-	rawTxStream      api.API_SendRawTransactionStreamClient
-	backrunStream    api.API_BackrunStreamClient
-	rawBackrunStream api.API_RawBackrunStreamClient
+	txStream    api.API_SendTransactionClient
+	rawTxStream api.API_SendRawTransactionClient
+	// backrunStream    api.API_BackrunStreamClient
+	// rawBackrunStream api.API_RawBackrunStreamClient
 }
 
 func NewClient(target, apiKey string) *Client {
@@ -129,34 +129,33 @@ func (c *Client) Connect(ctx context.Context) error {
 	c.client = api.NewAPIClient(conn)
 
 	ctx = metadata.AppendToOutgoingContext(context.Background(), "x-api-key", c.key)
-	c.txStream, err = c.client.SendTransactionStream(ctx)
+	c.txStream, err = c.client.SendTransaction(ctx)
 	if err != nil {
 		return err
 	}
 
-	c.rawTxStream, err = c.client.SendRawTransactionStream(ctx)
+	c.rawTxStream, err = c.client.SendRawTransaction(ctx)
 	if err != nil {
 		return err
 	}
 
-	c.backrunStream, err = c.client.BackrunStream(ctx)
-	if err != nil {
-		return err
-	}
+	// c.backrunStream, err = c.client.BackrunStream(ctx)
+	// if err != nil {
+	// 	return err
+	// }
 
-	c.rawBackrunStream, err = c.client.RawBackrunStream(ctx)
-	if err != nil {
-		return err
-	}
+	// c.rawBackrunStream, err = c.client.RawBackrunStream(ctx)
+	// if err != nil {
+	// 	return err
+	// }
 
 	return nil
 }
 
 func (c *Client) Close() error {
 	c.txStream.CloseSend()
-	c.backrunStream.CloseSend()
 	c.rawTxStream.CloseSend()
-	c.rawBackrunStream.CloseSend()
+	// c.rawBackrunStream.CloseSend()
 	return c.conn.Close()
 }
 
@@ -215,64 +214,64 @@ func (c *Client) SendRawTransaction(ctx context.Context, rawTx []byte) (string, 
 	}
 }
 
-func (c *Client) BackrunTransaction(ctx context.Context, hash common.Hash, tx *types.Transaction) (string, int64, error) {
-	proto, err := TxToProto(tx)
-	if err != nil {
-		return "", 0, fmt.Errorf("converting to protobuf: %w", err)
-	}
+// func (c *Client) BackrunTransaction(ctx context.Context, hash common.Hash, tx *types.Transaction) (string, int64, error) {
+// 	proto, err := TxToProto(tx)
+// 	if err != nil {
+// 		return "", 0, fmt.Errorf("converting to protobuf: %w", err)
+// 	}
 
-	errc := make(chan error)
-	go func() {
-		if err := c.backrunStream.Send(&api.BackrunMsg{
-			Hash: hash.String(),
-			Tx:   proto,
-		}); err != nil {
-			errc <- err
-		}
-	}()
+// 	errc := make(chan error)
+// 	go func() {
+// 		if err := c.backrunStream.Send(&api.BackrunMsg{
+// 			Hash: hash.String(),
+// 			Tx:   proto,
+// 		}); err != nil {
+// 			errc <- err
+// 		}
+// 	}()
 
-	for {
-		select {
-		case err := <-errc:
-			return "", 0, err
-		default:
-		}
+// 	for {
+// 		select {
+// 		case err := <-errc:
+// 			return "", 0, err
+// 		default:
+// 		}
 
-		res, err := c.backrunStream.Recv()
-		if err != nil {
-			return "", 0, err
-		} else {
-			return res.Hash, res.Timestamp, nil
-		}
-	}
-}
+// 		res, err := c.backrunStream.Recv()
+// 		if err != nil {
+// 			return "", 0, err
+// 		} else {
+// 			return res.Hash, res.Timestamp, nil
+// 		}
+// 	}
+// }
 
-func (c *Client) RawBackrunTransaction(ctx context.Context, hash common.Hash, rawTx []byte) (string, int64, error) {
-	errc := make(chan error)
-	go func() {
-		if err := c.rawBackrunStream.Send(&api.RawBackrunMsg{
-			Hash:  hash.String(),
-			RawTx: rawTx,
-		}); err != nil {
-			errc <- err
-		}
-	}()
+// func (c *Client) RawBackrunTransaction(ctx context.Context, hash common.Hash, rawTx []byte) (string, int64, error) {
+// 	errc := make(chan error)
+// 	go func() {
+// 		if err := c.rawBackrunStream.Send(&api.RawBackrunMsg{
+// 			Hash:  hash.String(),
+// 			RawTx: rawTx,
+// 		}); err != nil {
+// 			errc <- err
+// 		}
+// 	}()
 
-	for {
-		select {
-		case err := <-errc:
-			return "", 0, err
-		default:
-		}
+// 	for {
+// 		select {
+// 		case err := <-errc:
+// 			return "", 0, err
+// 		default:
+// 		}
 
-		res, err := c.rawBackrunStream.Recv()
-		if err != nil {
-			return "", 0, err
-		} else {
-			return res.Hash, res.Timestamp, nil
-		}
-	}
-}
+// 		res, err := c.rawBackrunStream.Recv()
+// 		if err != nil {
+// 			return "", 0, err
+// 		} else {
+// 			return res.Hash, res.Timestamp, nil
+// 		}
+// 	}
+// }
 
 // SubscribeNewTxs subscribes to new transactions, and sends transactions on the given
 // channel according to the filter. This function blocks and should be called in a goroutine.
@@ -282,12 +281,12 @@ func (c *Client) SubscribeNewTxs(filter *filter.Filter, ch chan<- *Transaction) 
 	defer cancel()
 	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 
-	protoFilter := &api.TxFilterV2{}
+	protoFilter := &api.TxFilter{}
 	if filter != nil {
 		protoFilter.Encoded = filter.Encode()
 	}
 
-	res, err := c.client.SubscribeNewTxsV2(ctx, protoFilter)
+	res, err := c.client.SubscribeNewTxs(ctx, protoFilter)
 	if err != nil {
 		return fmt.Errorf("subscribing to api: %w", err)
 	}
@@ -303,26 +302,26 @@ func (c *Client) SubscribeNewTxs(filter *filter.Filter, ch chan<- *Transaction) 
 	}
 }
 
-func (c *Client) SubscribeNewBlocks(filter *api.BlockFilter, ch chan<- *eth.Block) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
+// func (c *Client) SubscribeNewBlocks(filter *api.BlockFilter, ch chan<- *eth.Block) error {
+// 	ctx, cancel := context.WithCancel(context.Background())
+// 	defer cancel()
+// 	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 
-	res, err := c.client.SubscribeNewBlocks(ctx, filter)
-	if err != nil {
-		return fmt.Errorf("subscribing to api: %w", err)
-	}
+// 	res, err := c.client.SubscribeNewBlocks(ctx, filter)
+// 	if err != nil {
+// 		return fmt.Errorf("subscribing to api: %w", err)
+// 	}
 
-	for {
-		proto, err := res.Recv()
-		if err != nil {
-			close(ch)
-			return err
-		}
+// 	for {
+// 		proto, err := res.Recv()
+// 		if err != nil {
+// 			close(ch)
+// 			return err
+// 		}
 
-		ch <- proto
-	}
-}
+// 		ch <- proto
+// 	}
+// }
 
 func TxToProto(tx *types.Transaction) (*eth.Transaction, error) {
 	signer := types.NewLondonSigner(common.Big1)
