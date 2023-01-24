@@ -14,8 +14,8 @@ func traverse(n *Node) {
 		fmt.Println("Operator:", n.Operator)
 	}
 
-	fmt.Println("Children:", len(n.Nodes))
-	for _, child := range n.Nodes {
+	fmt.Println("Children:", len(n.Children))
+	for _, child := range n.Children {
 		traverse(child)
 	}
 }

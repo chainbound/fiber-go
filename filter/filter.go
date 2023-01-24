@@ -16,9 +16,9 @@ const (
 )
 
 type Node struct {
-	Operand  *FilterKV
-	Operator Operator
-	Nodes    []*Node
+	Operand  *FilterKV `json:"Operand,omitempty"`
+	Operator Operator  `json:"Operator,omitempty"`
+	Children []*Node   `json:"Children,omitempty"`
 }
 
 type Filter struct {
@@ -39,8 +39,8 @@ func (f Filter) Encode() []byte {
 }
 
 type FilterKV struct {
-	Key   string `json:"key,omitempty"`
-	Value []byte `json:"value,omitempty"`
+	Key   string `json:"Key,omitempty"`
+	Value []byte `json:"Value,omitempty"`
 }
 
 func (kv FilterKV) String() string {
@@ -65,7 +65,7 @@ func And(ops ...FilterOp) FilterOp {
 				Operator: AND,
 			}
 
-			n.Nodes = append(n.Nodes, new)
+			n.Children = append(n.Children, new)
 		}
 
 		for _, op := range ops {
@@ -89,7 +89,7 @@ func Or(ops ...FilterOp) FilterOp {
 				Operator: OR,
 			}
 
-			n.Nodes = append(n.Nodes, new)
+			n.Children = append(n.Children, new)
 		}
 
 		for _, op := range ops {
@@ -109,7 +109,7 @@ func To(to string) FilterOp {
 
 			f.Root = new
 		} else {
-			n.Nodes = append(n.Nodes, &Node{
+			n.Children = append(n.Children, &Node{
 				Operand: &FilterKV{"to", common.HexToAddress(to).Bytes()},
 			})
 		}
@@ -126,7 +126,7 @@ func From(from string) FilterOp {
 
 			f.Root = new
 		} else {
-			n.Nodes = append(n.Nodes, &Node{
+			n.Children = append(n.Children, &Node{
 				Operand: &FilterKV{"from", common.HexToAddress(from).Bytes()},
 			})
 		}
@@ -143,7 +143,7 @@ func MethodID(id string) FilterOp {
 
 			f.Root = new
 		} else {
-			n.Nodes = append(n.Nodes, &Node{
+			n.Children = append(n.Children, &Node{
 				Operand: &FilterKV{"method", common.FromHex(id)},
 			})
 		}
@@ -160,7 +160,7 @@ func Value(v *big.Int) FilterOp {
 
 			f.Root = new
 		} else {
-			n.Nodes = append(n.Nodes, &Node{
+			n.Children = append(n.Children, &Node{
 				Operand: &FilterKV{"value", v.Bytes()},
 			})
 		}
