@@ -118,43 +118,55 @@ You can currently filter the following properties
 * From
 * MethodID
 * Value (greater than)
-#### Blocks
-WIP
-<!-- ```go
+#### Headers
+```go
 import (
-    "context"
-    "log"
-    "time"
-    
+    ...
     fiber "github.com/chainbound/fiber-go"
-    "github.com/chainbound/fiber-go/protobuf/api"
-    "github.com/chainbound/fiber-go/protobuf/eth"
 )
 
 func main() {
-    endpoint := "fiber.example.io"
-    apiKey := "YOUR_API_KEY"
-    client := fiber.NewClient(endpoint, apiKey)
-    defer client.Close()
+    ...
 
-    ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-    defer cancel()
-    if err := client.Connect(ctx); err != nil {
-        log.Fatal(err)
-    }
+    ch := make(chan *fiber.Header)
 
-    ch := make(chan *eth.Block)
     go func() {
-        if err := client.SubscribeNewBlocks(nil, ch); err != nil {
+        // apply filter
+        if err := client.SubscribeNewHeaders(ch); err != nil {
             log.Fatal(err)
         }
     }()
 
-    for tx := range ch {
-        handleBlock(tx)
+    for header := range ch {
+        handleHeader(block)        
     }
 }
-``` -->
+```
+
+#### Blocks
+```go
+import (
+    ...
+    fiber "github.com/chainbound/fiber-go"
+)
+
+func main() {
+    ...
+
+    ch := make(chan *fiber.Block)
+
+    go func() {
+        // apply filter
+        if err := client.SubscribeNewBlocks(ch); err != nil {
+            log.Fatal(err)
+        }
+    }()
+
+    for block := range ch {
+        handleBlock(block)        
+    }
+}
+```
 
 ### Sending Transactions
 #### `SendTransaction`
@@ -212,7 +224,7 @@ func main() {
     doSomething(hash, timestamp)
 }
 ```
-#### `BackrunTransaction`
+#### `SendTransactionSequence`
 ```go
 import (
     "context"
@@ -259,14 +271,138 @@ func main() {
         log.Fatal(err)
     }
 
-    // type should be common.Hash
-    target := someTargetTransactionHash
+    // type should be *types.Transaction (but signed, e.g. v,r,s fields filled in)
+    target := someTargetTransaction
 
-    hash, timestamp, err := client.BackrunTransaction(ctx, target, signed)
+    hashes, timestamp, err := client.SendTransactionSequence(ctx, target, signed)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    doSomething(hashes, timestamp)
+}
+```
+#### `SendRawTransaction`
+```go
+import (
+    "context"
+    "log"
+    "math/big"
+    "time"
+
+    fiber "github.com/chainbound/fiber-go"
+
+    "github.com/ethereum/go-ethereum/core/types"
+    "github.com/ethereum/go-ethereum/common"
+    "github.com/ethereum/go-ethereum/crypto"
+
+)
+
+func main() {
+    endpoint := "fiber.example.io"
+    apiKey := "YOUR_API_KEY"
+    client := fiber.NewClient(endpoint, apiKey)
+    defer client.Close()
+
+    ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+    defer cancel()
+    if err := client.Connect(ctx); err != nil {
+        log.Fatal(err)
+    }
+
+    // Example transaction
+    tx := types.NewTx(&types.DynamicFeeTx{
+        Nonce:     nonce,
+        To:        common.HexToAddress("0x...."),
+        Value:     big.NewInt(100),
+        Gas:       21000,
+        GasFeeCap: big.NewInt(x),
+        GasTipCap: big.NewInt(y),
+        Data:      nil,
+    })
+
+    pk, _ := crypto.HexToECDSA("PRIVATE_KEY")
+    signer := types.NewLondonSigner(common.Big1)
+
+    signed, err := types.SignTx(tx, signer, pk)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    bytes, err := signed.MarshalBinary()
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    hash, timestamp, err := client.SendRawTransaction(ctx, bytes)
     if err != nil {
         log.Fatal(err)
     }
 
     doSomething(hash, timestamp)
+}
+```
+
+#### `SendRawTransactionSequence`
+```go
+import (
+    "context"
+    "log"
+    "math/big"
+    "time"
+
+    fiber "github.com/chainbound/fiber-go"
+
+    "github.com/ethereum/go-ethereum/core/types"
+    "github.com/ethereum/go-ethereum/common"
+    "github.com/ethereum/go-ethereum/crypto"
+
+)
+
+func main() {
+    endpoint := "fiber.example.io"
+    apiKey := "YOUR_API_KEY"
+    client := fiber.NewClient(endpoint, apiKey)
+    defer client.Close()
+
+    ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+    defer cancel()
+    if err := client.Connect(ctx); err != nil {
+        log.Fatal(err)
+    }
+
+    // Example transaction
+    tx := types.NewTx(&types.DynamicFeeTx{
+        Nonce:     nonce,
+        To:        common.HexToAddress("0x...."),
+        Value:     big.NewInt(100),
+        Gas:       21000,
+        GasFeeCap: big.NewInt(x),
+        GasTipCap: big.NewInt(y),
+        Data:      nil,
+    })
+
+    pk, _ := crypto.HexToECDSA("PRIVATE_KEY")
+    signer := types.NewLondonSigner(common.Big1)
+
+    signed, err := types.SignTx(tx, signer, pk)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    bytes, err := signed.MarshalBinary()
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Type should be []byte
+    targetTransaction := someTargetTransaction
+
+    hashes, timestamp, err := client.SendRawTransactionSequence(ctx, bytes)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    doSomething(hashes, timestamp)
 }
 ```
