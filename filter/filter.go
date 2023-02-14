@@ -40,7 +40,7 @@ func (f Filter) Encode() []byte {
 
 type FilterKV struct {
 	Key   string `json:"Key,omitempty"`
-	Value []byte `json:"Value,omitempty"`
+	Value []byte `json:"Value"`
 }
 
 func (kv FilterKV) String() string {
@@ -150,18 +150,52 @@ func MethodID(id string) FilterOp {
 	}
 }
 
-func Value(v *big.Int) FilterOp {
+func ValueEq(v *big.Int) FilterOp {
 	return func(f *Filter, n *Node) {
 		var new *Node
 		if n == nil {
 			new = &Node{
-				Operand: &FilterKV{"value", v.Bytes()},
+				Operand: &FilterKV{"value_eq", v.Bytes()},
 			}
 
 			f.Root = new
 		} else {
 			n.Children = append(n.Children, &Node{
-				Operand: &FilterKV{"value", v.Bytes()},
+				Operand: &FilterKV{"value_eq", v.Bytes()},
+			})
+		}
+	}
+}
+
+func ValueGte(v *big.Int) FilterOp {
+	return func(f *Filter, n *Node) {
+		var new *Node
+		if n == nil {
+			new = &Node{
+				Operand: &FilterKV{"value_gte", v.Bytes()},
+			}
+
+			f.Root = new
+		} else {
+			n.Children = append(n.Children, &Node{
+				Operand: &FilterKV{"value_gte", v.Bytes()},
+			})
+		}
+	}
+}
+
+func ValueLte(v *big.Int) FilterOp {
+	return func(f *Filter, n *Node) {
+		var new *Node
+		if n == nil {
+			new = &Node{
+				Operand: &FilterKV{"value_lte", v.Bytes()},
+			}
+
+			f.Root = new
+		} else {
+			n.Children = append(n.Children, &Node{
+				Operand: &FilterKV{"value_lte", v.Bytes()},
 			})
 		}
 	}
