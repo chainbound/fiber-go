@@ -473,10 +473,6 @@ func ProtoToTx(proto *eth.Transaction) *Transaction {
 		if proto.V > 1 {
 			proto.V = proto.V - 37
 		}
-	} else {
-		if proto.V > 30 {
-			proto.V = proto.V - 10
-		}
 	}
 
 	return &Transaction{
