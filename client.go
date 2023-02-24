@@ -469,6 +469,12 @@ func ProtoToTx(proto *eth.Transaction) *Transaction {
 		}
 	}
 
+	if proto.Type > 0 {
+		if proto.V > 1 {
+			proto.V = proto.V - 37
+		}
+	}
+
 	return &Transaction{
 		ChainID:     proto.ChainId,
 		Type:        proto.Type,
