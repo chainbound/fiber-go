@@ -90,10 +90,16 @@ func main() {
         filter.To("0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"),
     ))
 
-    // example 2: all transactions with a value greater than 1 ETH
-    f := filter.New(filter.Value(big.NewInt(1) * big.NewInt(1e18)))
+    // example 2: all transactions with a value greater than or equal to 1 ETH
+    f := filter.New(filter.ValueGte(big.NewInt(1) * big.NewInt(1e18)))
+    
+    // example 3: all transactions with a value equal to 1 ETH
+    f := filter.New(filter.ValueEq(big.NewInt(1) * big.NewInt(1e18)))
+    
+    // example 4: all transactions with a value less than or equal to 1 ETH
+    f := filter.New(filter.ValueLte(big.NewInt(1) * big.NewInt(1e18)))
 
-    // example 3: all ERC20 transfers on the 2 tokens below
+    // example 5: all ERC20 transfers on the 2 tokens below
     f := filter.New(filter.And(
         filter.MethodID("0xa9059cbb"),
         filter.Or(
@@ -117,7 +123,7 @@ You can currently filter the following properties
 * To
 * From
 * MethodID
-* Value (greater than)
+* Value (greater than, less than, equal to)
 #### Headers
 ```go
 import (
