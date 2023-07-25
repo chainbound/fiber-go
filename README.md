@@ -404,7 +404,7 @@ func main() {
     // Type should be []byte
     targetTransaction := someTargetTransaction
 
-    hashes, timestamp, err := client.SendRawTransactionSequence(ctx, bytes)
+    hashes, timestamp, err := client.SendRawTransactionSequence(ctx, targetTransaction, bytes)
     if err != nil {
         log.Fatal(err)
     }
