@@ -351,12 +351,12 @@ func (c *Client) SubscribeNewTxs(filter *filter.Filter, ch chan<- *Transaction) 
 	}
 }
 
-func (c *Client) SubscribeNewHeaders(ch chan<- *Header) error {
+func (c *Client) SubscribeNewExecutionHeaders(ch chan<- *Header) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 
-	res, err := c.client.SubscribeNewBlocks(ctx, &emptypb.Empty{})
+	res, err := c.client.SubscribeExecutionHeaders(ctx, &emptypb.Empty{})
 	if err != nil {
 		return fmt.Errorf("subscribing to blocks: %w", err)
 	}
@@ -372,12 +372,12 @@ func (c *Client) SubscribeNewHeaders(ch chan<- *Header) error {
 	}
 }
 
-func (c *Client) SubscribeNewBlocks(ch chan<- *Block) error {
+func (c *Client) SubscribeNewExecutionPayloads(ch chan<- *Block) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 
-	res, err := c.client.SubscribeNewBlocks(ctx, &emptypb.Empty{})
+	res, err := c.client.SubscribeExecutionPayloads(ctx, &emptypb.Empty{})
 	if err != nil {
 		return fmt.Errorf("subscribing to blocks: %w", err)
 	}
@@ -390,6 +390,27 @@ func (c *Client) SubscribeNewBlocks(ch chan<- *Block) error {
 		}
 
 		ch <- ProtoToBlock(proto)
+	}
+}
+
+func (c *Client) SubscribeNewBeaconBlocks(ch chan<- *eth.CompactBeaconBlock) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
+
+	res, err := c.client.SubscribeBeaconBlocks(ctx, &emptypb.Empty{})
+	if err != nil {
+		return fmt.Errorf("subscribing to blocks: %w", err)
+	}
+
+	for {
+		proto, err := res.Recv()
+		if err != nil {
+			close(ch)
+			return err
+		}
+
+		ch <- proto
 	}
 }
 
@@ -495,13 +516,13 @@ func ProtoToTx(proto *eth.Transaction) *Transaction {
 	}
 }
 
-func ProtoToHeader(proto *eth.Block) *Header {
+func ProtoToHeader(proto *eth.ExecutionPayloadHeader) *Header {
 	return &Header{
-		Number:        proto.Number,
-		Hash:          common.BytesToHash(proto.Hash),
+		Number:        proto.BlockNumber,
+		Hash:          common.BytesToHash(proto.BlockHash),
 		ParentHash:    common.BytesToHash(proto.ParentHash),
 		StateRoot:     common.BytesToHash(proto.StateRoot),
-		ReceiptRoot:   common.BytesToHash(proto.ReceiptRoot),
+		ReceiptRoot:   common.BytesToHash(proto.ReceiptsRoot),
 		PrevRandao:    common.BytesToHash(proto.PrevRandao),
 		LogsBloom:     types.BytesToBloom(proto.LogsBloom),
 		GasLimit:      proto.GasLimit,
@@ -513,26 +534,27 @@ func ProtoToHeader(proto *eth.Block) *Header {
 	}
 }
 
-func ProtoToBlock(proto *eth.Block) *Block {
+func ProtoToBlock(proto *eth.ExecutionPayload) *Block {
+	header := proto.Header
 	txs := make([]*Transaction, len(proto.Transactions))
 	for i, proto := range proto.Transactions {
 		txs[i] = ProtoToTx(proto)
 	}
 
 	return &Block{
-		Number:        proto.Number,
-		Hash:          common.BytesToHash(proto.Hash),
-		StateRoot:     common.BytesToHash(proto.StateRoot),
-		ParentHash:    common.BytesToHash(proto.ParentHash),
-		ReceiptRoot:   common.BytesToHash(proto.ReceiptRoot),
-		PrevRandao:    common.BytesToHash(proto.PrevRandao),
-		LogsBloom:     types.BytesToBloom(proto.LogsBloom),
-		GasLimit:      proto.GasLimit,
-		GasUsed:       proto.GasUsed,
-		Timestamp:     proto.Timestamp,
-		ExtraData:     proto.ExtraData,
-		FeeRecipient:  common.BytesToAddress(proto.FeeRecipient),
-		BaseFeePerGas: new(big.Int).SetBytes(proto.BaseFeePerGas),
+		Number:        header.BlockNumber,
+		Hash:          common.BytesToHash(header.BlockHash),
+		StateRoot:     common.BytesToHash(header.StateRoot),
+		ParentHash:    common.BytesToHash(header.ParentHash),
+		ReceiptRoot:   common.BytesToHash(header.ReceiptsRoot),
+		PrevRandao:    common.BytesToHash(header.PrevRandao),
+		LogsBloom:     types.BytesToBloom(header.LogsBloom),
+		GasLimit:      header.GasLimit,
+		GasUsed:       header.GasUsed,
+		Timestamp:     header.Timestamp,
+		ExtraData:     header.ExtraData,
+		FeeRecipient:  common.BytesToAddress(header.FeeRecipient),
+		BaseFeePerGas: new(big.Int).SetBytes(header.BaseFeePerGas),
 		Transactions:  txs,
 	}
 }
