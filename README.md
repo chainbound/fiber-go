@@ -124,7 +124,7 @@ You can currently filter the following properties
 * From
 * MethodID
 * Value (greater than, less than, equal to)
-#### Headers
+#### Execution Headers (new block headers)
 ```go
 import (
     ...
@@ -137,8 +137,7 @@ func main() {
     ch := make(chan *fiber.Header)
 
     go func() {
-        // apply filter
-        if err := client.SubscribeNewHeaders(ch); err != nil {
+        if err := client.SubscribeNewExecutionHeaders(ch); err != nil {
             log.Fatal(err)
         }
     }()
@@ -149,7 +148,7 @@ func main() {
 }
 ```
 
-#### Blocks
+#### Execution Payloads (new blocks with transactions)
 ```go
 import (
     ...
@@ -162,14 +161,40 @@ func main() {
     ch := make(chan *fiber.Block)
 
     go func() {
-        // apply filter
-        if err := client.SubscribeNewBlocks(ch); err != nil {
+        if err := client.SubscribeNewExecutionPayloads(ch); err != nil {
             log.Fatal(err)
         }
     }()
 
     for block := range ch {
         handleBlock(block)        
+    }
+}
+```
+
+#### Beacon Blocks
+Beacon blocks follow the [Consensus specs](https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#beaconblock), with the exception of the `ExecutionPayload`, which is not included to
+allow for a smaller payload size. Please use the `SubscribeNewExecutionPayloads` stream if you need it.
+
+```go
+import (
+    ...
+    fiber "github.com/chainbound/fiber-go"
+)
+
+func main() {
+    ...
+
+    ch := make(chan *fiber.Block)
+
+    go func() {
+        if err := client.SubscribeNewBeaconBlocks(ch); err != nil {
+            log.Fatal(err)
+        }
+    }()
+
+    for block := range ch {
+        handleBeaconBlock(block)
     }
 }
 ```
