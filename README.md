@@ -137,7 +137,7 @@ func main() {
     ch := make(chan *fiber.Header)
 
     go func() {
-        if err := client.SubscribeNewExecutionHeaders(ch); err != nil {
+        if err := client.SubscribeNewExecutionPayloadHeaders(ch); err != nil {
             log.Fatal(err)
         }
     }()
