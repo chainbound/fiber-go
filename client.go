@@ -293,7 +293,7 @@ func (c *Client) SubscribeNewExecutionPayloads(ch chan<- *ExecutionPayload) erro
 	}
 }
 
-func (c *Client) SubscribeNewBeaconBlocks(ch chan<- *eth.CompactBeaconBlock) error {
+func (c *Client) SubscribeNewBeaconBlocks(ch chan<- *BeaconBlock) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
@@ -310,6 +310,6 @@ func (c *Client) SubscribeNewBeaconBlocks(ch chan<- *eth.CompactBeaconBlock) err
 			return err
 		}
 
-		ch <- proto
+		ch <- ProtoToBeaconBlock(proto)
 	}
 }
