@@ -196,7 +196,7 @@ type ExecutionPayloadHeader struct {
 }
 
 type ExecutionPayload struct {
-	header       *ExecutionPayloadHeader
+	Header       *ExecutionPayloadHeader
 	Transactions []*Transaction
 }
 
@@ -226,7 +226,7 @@ func ProtoToBlock(proto *eth.ExecutionPayload) *ExecutionPayload {
 	}
 
 	return &ExecutionPayload{
-		header:       ProtoToHeader(header),
+		Header:       ProtoToHeader(header),
 		Transactions: txs,
 	}
 }
@@ -346,7 +346,7 @@ type ExecutionChangeMessage struct {
 	ToExecutionAddress common.Hash
 }
 
-func ProtoToBeaconBlock(block *eth.CompactBeaconBlock) BeaconBlock {
+func ProtoToBeaconBlock(block *eth.CompactBeaconBlock) *BeaconBlock {
 	body := block.GetBody()
 
 	beacon := BeaconBlock{
@@ -400,7 +400,7 @@ func ProtoToBeaconBlock(block *eth.CompactBeaconBlock) BeaconBlock {
 		})
 	}
 
-	return beacon
+	return &beacon
 }
 
 func fromProtoProposerSlashing(slashing *eth.ProposerSlashing) ProposerSlashing {
