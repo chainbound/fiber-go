@@ -1,11 +1,14 @@
 package client
 
 import (
+	"bytes"
+	"fmt"
 	"math/big"
 
 	"github.com/chainbound/fiber-go/protobuf/eth"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // ==================== TRANSACTION ====================
@@ -157,6 +160,15 @@ func ProtoToTx(proto *eth.Transaction) *Transaction {
 		}
 	}
 
+	value := new(big.Int)
+	if len(proto.Value) > 0 {
+		if err := rlp.Decode(bytes.NewReader(proto.Value), value); err != nil {
+			fmt.Println(err)
+		}
+	} else {
+		value = big.NewInt(0)
+	}
+
 	return &Transaction{
 		ChainID:     proto.ChainId,
 		Type:        proto.Type,
@@ -168,7 +180,7 @@ func ProtoToTx(proto *eth.Transaction) *Transaction {
 		To:          to,
 		From:        common.BytesToAddress(proto.From),
 		Hash:        common.BytesToHash(proto.Hash),
-		Value:       new(big.Int).SetBytes(proto.Value),
+		Value:       value,
 		Input:       proto.Input,
 		V:           proto.V,
 		R:           proto.R,
