@@ -134,7 +134,7 @@ import (
 func main() {
     ...
 
-    ch := make(chan *fiber.Header)
+    ch := make(chan *fiber.ExecutionPayloadHeader)
 
     go func() {
         if err := client.SubscribeNewExecutionPayloadHeaders(ch); err != nil {
@@ -158,7 +158,7 @@ import (
 func main() {
     ...
 
-    ch := make(chan *fiber.Block)
+    ch := make(chan *fiber.ExecutionPayload)
 
     go func() {
         if err := client.SubscribeNewExecutionPayloads(ch); err != nil {
@@ -185,7 +185,7 @@ import (
 func main() {
     ...
 
-    ch := make(chan *fiber.Block)
+    ch := make(chan *fiber.BeaconBlock)
 
     go func() {
         if err := client.SubscribeNewBeaconBlocks(ch); err != nil {
