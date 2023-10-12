@@ -6,6 +6,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/chainbound/fiber-go/filter"
 	"github.com/chainbound/fiber-go/protobuf/api"
@@ -41,11 +42,25 @@ func NewClient(target, apiKey string) *Client {
 // Connects sets up the gRPC channel and creates the stub. It blocks until connected or the given context expires.
 // Always use a context with timeout.
 func (c *Client) Connect(ctx context.Context) error {
+	serviceConfig := `{
+		"methodConfig": [{
+			"name": [{"service": "API"}],
+			"retryPolicy": {
+				"MaxAttempts": 20,
+				"InitialBackoff": "2s",
+				"MaxBackoff": "60s",
+				"BackoffMultiplier": 1.2,
+				"RetryableStatusCodes": ["UNAVAILABLE", "ABORTED"]
+			}
+		}]
+	}`
+
 	conn, err := grpc.DialContext(ctx, c.target,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 		grpc.WithReadBufferSize(0),
 		grpc.WithWriteBufferSize(0),
+		grpc.WithDefaultServiceConfig(serviceConfig),
 	)
 	if err != nil {
 		return err
@@ -166,27 +181,25 @@ func (c *Client) SendTransactionSequence(ctx context.Context, transactions ...*t
 		}
 	}()
 
-	for {
-		select {
-		case err := <-errc:
-			return nil, 0, err
-		default:
-		}
-
-		res, err := c.txSeqStream.Recv()
-		if err != nil {
-			return nil, 0, err
-		}
-
-		hashes := make([]string, len(res.SequenceResponse))
-		ts := res.SequenceResponse[0].Timestamp
-
-		for i, response := range res.SequenceResponse {
-			hashes[i] = response.Hash
-		}
-
-		return hashes, ts, nil
+	select {
+	case err := <-errc:
+		return nil, 0, err
+	default:
 	}
+
+	res, err := c.txSeqStream.Recv()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	hashes := make([]string, len(res.SequenceResponse))
+	ts := res.SequenceResponse[0].Timestamp
+
+	for i, response := range res.SequenceResponse {
+		hashes[i] = response.Hash
+	}
+
+	return hashes, ts, nil
 }
 
 func (c *Client) SendRawTransactionSequence(ctx context.Context, rawTransactions ...[]byte) ([]string, int64, error) {
@@ -198,118 +211,159 @@ func (c *Client) SendRawTransactionSequence(ctx context.Context, rawTransactions
 		}
 	}()
 
-	for {
-		select {
-		case err := <-errc:
-			return nil, 0, err
-		default:
-		}
-
-		res, err := c.rawTxSeqStream.Recv()
-		if err != nil {
-			return nil, 0, err
-		}
-
-		hashes := make([]string, len(res.SequenceResponse))
-
-		ts := res.SequenceResponse[0].Timestamp
-
-		for i, response := range res.SequenceResponse {
-			hashes[i] = response.Hash
-		}
-
-		return hashes, ts, nil
+	select {
+	case err := <-errc:
+		return nil, 0, err
+	default:
 	}
+
+	res, err := c.rawTxSeqStream.Recv()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	hashes := make([]string, len(res.SequenceResponse))
+
+	ts := res.SequenceResponse[0].Timestamp
+
+	for i, response := range res.SequenceResponse {
+		hashes[i] = response.Hash
+	}
+
+	return hashes, ts, nil
 }
 
 // SubscribeNewTxs subscribes to new transactions, and sends transactions on the given
 // channel according to the filter. This function blocks and should be called in a goroutine.
 // If there's an error receiving the new message it will close the channel and return the error.
 func (c *Client) SubscribeNewTxs(filter *filter.Filter, ch chan<- *Transaction) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
-
-	protoFilter := &api.TxFilter{}
-	if filter != nil {
-		protoFilter.Encoded = filter.Encode()
-	}
-
-	res, err := c.client.SubscribeNewTxs(ctx, protoFilter)
-	if err != nil {
-		return fmt.Errorf("subscribing to transactions: %w", err)
-	}
-
+	attempts := 0
+outer:
 	for {
-		proto, err := res.Recv()
-		if err != nil {
-			close(ch)
-			return err
+		attempts++
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
+
+		protoFilter := &api.TxFilter{}
+		if filter != nil {
+			protoFilter.Encoded = filter.Encode()
 		}
 
-		ch <- ProtoToTx(proto)
+		res, err := c.client.SubscribeNewTxs(ctx, protoFilter)
+		if err != nil {
+			if attempts > 50 {
+				return fmt.Errorf("subscribing to transactions after 50 attempts: %w", err)
+			}
+			fmt.Println("Transaction stream failed, retrying...")
+			time.Sleep(time.Second * 2)
+			continue outer
+		}
+
+		fmt.Println("Transaction stream established")
+
+		for {
+			proto, err := res.Recv()
+			// For now, retry on every error.
+			if err != nil {
+				time.Sleep(time.Second * 2)
+				continue outer
+			}
+
+			ch <- ProtoToTx(proto)
+		}
 	}
 }
 
 func (c *Client) SubscribeNewExecutionPayloadHeaders(ch chan<- *ExecutionPayloadHeader) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
-
-	res, err := c.client.SubscribeExecutionHeaders(ctx, &emptypb.Empty{})
-	if err != nil {
-		return fmt.Errorf("subscribing to blocks: %w", err)
-	}
-
+	attempts := 0
+outer:
 	for {
-		proto, err := res.Recv()
+		attempts++
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
+
+		res, err := c.client.SubscribeExecutionHeaders(ctx, &emptypb.Empty{})
 		if err != nil {
-			close(ch)
-			return err
+			if attempts > 50 {
+				return fmt.Errorf("subscribing to execution headers after 50 attempts: %w", err)
+			}
+			fmt.Println("Execution header stream failed, retrying...")
+			time.Sleep(time.Second * 2)
+			continue outer
 		}
 
-		ch <- ProtoToHeader(proto)
+		for {
+			proto, err := res.Recv()
+			// For now, retry on every error.
+			if err != nil {
+				time.Sleep(time.Second * 2)
+				continue outer
+			}
+
+			ch <- ProtoToHeader(proto)
+		}
 	}
 }
 
 func (c *Client) SubscribeNewExecutionPayloads(ch chan<- *ExecutionPayload) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
-
-	res, err := c.client.SubscribeExecutionPayloads(ctx, &emptypb.Empty{})
-	if err != nil {
-		return fmt.Errorf("subscribing to blocks: %w", err)
-	}
-
+	attempts := 0
+outer:
 	for {
-		proto, err := res.Recv()
+		attempts++
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
+
+		res, err := c.client.SubscribeExecutionPayloads(ctx, &emptypb.Empty{})
 		if err != nil {
-			close(ch)
-			return err
+			if attempts > 50 {
+				return fmt.Errorf("subscribing to execution payloads after 50 attempts: %w", err)
+			}
+			fmt.Println("Execution payload stream failed, retrying...")
+			time.Sleep(time.Second * 2)
+			continue outer
 		}
 
-		ch <- ProtoToBlock(proto)
+		for {
+			proto, err := res.Recv()
+			if err != nil {
+				time.Sleep(time.Second * 2)
+				continue outer
+			}
+
+			ch <- ProtoToBlock(proto)
+		}
 	}
 }
 
 func (c *Client) SubscribeNewBeaconBlocks(ch chan<- *BeaconBlock) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
-
-	res, err := c.client.SubscribeBeaconBlocks(ctx, &emptypb.Empty{})
-	if err != nil {
-		return fmt.Errorf("subscribing to blocks: %w", err)
-	}
-
+	attempts := 0
+outer:
 	for {
-		proto, err := res.Recv()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
+
+		res, err := c.client.SubscribeBeaconBlocks(ctx, &emptypb.Empty{})
 		if err != nil {
-			close(ch)
-			return err
+			if attempts > 50 {
+				return fmt.Errorf("subscribing to beacon blocks after 50 attempts: %w", err)
+			}
+			fmt.Println("Beacon block stream failed, retrying...")
+			time.Sleep(time.Second * 2)
+			continue outer
 		}
 
-		ch <- ProtoToBeaconBlock(proto)
+		for {
+			proto, err := res.Recv()
+			if err != nil {
+				time.Sleep(time.Second * 2)
+				continue outer
+			}
+
+			ch <- ProtoToBeaconBlock(proto)
+		}
 	}
 }
