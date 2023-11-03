@@ -17,6 +17,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	// Enables gzip compression
+	_ "google.golang.org/grpc/encoding/gzip"
 )
 
 type Client struct {
@@ -255,12 +258,9 @@ outer:
 			if attempts > 50 {
 				return fmt.Errorf("subscribing to transactions after 50 attempts: %w", err)
 			}
-			fmt.Println("Transaction stream failed, retrying...")
 			time.Sleep(time.Second * 2)
 			continue outer
 		}
-
-		fmt.Println("Transaction stream established")
 
 		for {
 			proto, err := res.Recv()
@@ -289,7 +289,6 @@ outer:
 			if attempts > 50 {
 				return fmt.Errorf("subscribing to execution headers after 50 attempts: %w", err)
 			}
-			fmt.Println("Execution header stream failed, retrying...")
 			time.Sleep(time.Second * 2)
 			continue outer
 		}
@@ -321,7 +320,6 @@ outer:
 			if attempts > 50 {
 				return fmt.Errorf("subscribing to execution payloads after 50 attempts: %w", err)
 			}
-			fmt.Println("Execution payload stream failed, retrying...")
 			time.Sleep(time.Second * 2)
 			continue outer
 		}
@@ -351,7 +349,6 @@ outer:
 			if attempts > 50 {
 				return fmt.Errorf("subscribing to beacon blocks after 50 attempts: %w", err)
 			}
-			fmt.Println("Beacon block stream failed, retrying...")
 			time.Sleep(time.Second * 2)
 			continue outer
 		}

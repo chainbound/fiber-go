@@ -2,7 +2,6 @@ package client
 
 import (
 	"bytes"
-	"fmt"
 	"math/big"
 
 	"github.com/chainbound/fiber-go/protobuf/eth"
@@ -163,7 +162,7 @@ func ProtoToTx(proto *eth.Transaction) *Transaction {
 	value := new(big.Int)
 	if len(proto.Value) > 0 {
 		if err := rlp.Decode(bytes.NewReader(proto.Value), value); err != nil {
-			fmt.Println(err)
+			return nil
 		}
 	} else {
 		value = big.NewInt(0)
