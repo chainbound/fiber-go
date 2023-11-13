@@ -136,6 +136,10 @@ func ProtoToTx(proto *eth.Transaction) *Transaction {
 
 	if len(proto.To) > 0 {
 		to = (*common.Address)(proto.To)
+	} else {
+		// for contract creations, the to address must be nil
+		// otherwise the RLP encoding will be invalid
+		to = nil
 	}
 
 	var acl []types.AccessTuple
