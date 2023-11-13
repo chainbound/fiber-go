@@ -47,30 +47,32 @@ func (tx *Transaction) ToNative() *types.Transaction {
 		})
 	case 1:
 		return types.NewTx(&types.AccessListTx{
-			ChainID:  big.NewInt(int64(tx.ChainID)),
-			Nonce:    tx.Nonce,
-			GasPrice: tx.GasPrice,
-			Gas:      tx.Gas,
-			To:       tx.To,
-			Value:    tx.Value,
-			Data:     tx.Input,
-			V:        big.NewInt(int64(tx.V)),
-			R:        new(big.Int).SetBytes(tx.R),
-			S:        new(big.Int).SetBytes(tx.S),
+			ChainID:    big.NewInt(int64(tx.ChainID)),
+			Nonce:      tx.Nonce,
+			GasPrice:   tx.GasPrice,
+			Gas:        tx.Gas,
+			To:         tx.To,
+			Value:      tx.Value,
+			Data:       tx.Input,
+			AccessList: tx.AccessList,
+			V:          big.NewInt(int64(tx.V)),
+			R:          new(big.Int).SetBytes(tx.R),
+			S:          new(big.Int).SetBytes(tx.S),
 		})
 	case 2:
 		return types.NewTx(&types.DynamicFeeTx{
-			ChainID:   big.NewInt(int64(tx.ChainID)),
-			Nonce:     tx.Nonce,
-			GasFeeCap: tx.MaxFee,
-			GasTipCap: tx.PriorityFee,
-			Gas:       tx.Gas,
-			To:        tx.To,
-			Value:     tx.Value,
-			Data:      tx.Input,
-			V:         big.NewInt(int64(tx.V)),
-			R:         new(big.Int).SetBytes(tx.R),
-			S:         new(big.Int).SetBytes(tx.S),
+			ChainID:    big.NewInt(int64(tx.ChainID)),
+			AccessList: tx.AccessList,
+			Nonce:      tx.Nonce,
+			GasFeeCap:  tx.MaxFee,
+			GasTipCap:  tx.PriorityFee,
+			Gas:        tx.Gas,
+			To:         tx.To,
+			Value:      tx.Value,
+			Data:       tx.Input,
+			V:          big.NewInt(int64(tx.V)),
+			R:          new(big.Int).SetBytes(tx.R),
+			S:          new(big.Int).SetBytes(tx.S),
 		})
 	}
 
@@ -134,6 +136,10 @@ func ProtoToTx(proto *eth.Transaction) *Transaction {
 
 	if len(proto.To) > 0 {
 		to = (*common.Address)(proto.To)
+	} else {
+		// for contract creations, the to address must be nil
+		// otherwise the RLP encoding will be invalid
+		to = nil
 	}
 
 	var acl []types.AccessTuple
