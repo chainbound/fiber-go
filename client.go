@@ -29,10 +29,11 @@ type Client struct {
 	key    string
 
 	// streams
-	txStream       api.API_SendTransactionClient
-	rawTxStream    api.API_SendRawTransactionClient
-	txSeqStream    api.API_SendTransactionSequenceClient
-	rawTxSeqStream api.API_SendRawTransactionSequenceClient
+	txStream          api.API_SendTransactionClient
+	rawTxStream       api.API_SendRawTransactionClient
+	txSeqStream       api.API_SendTransactionSequenceClient
+	rawTxSeqStream    api.API_SendRawTransactionSequenceClient
+	submitBlockStream api.API_SubmitBlockStreamClient
 }
 
 func NewClient(target, apiKey string) *Client {
@@ -61,8 +62,6 @@ func (c *Client) Connect(ctx context.Context) error {
 	conn, err := grpc.DialContext(ctx, c.target,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
-		grpc.WithReadBufferSize(0),
-		grpc.WithWriteBufferSize(0),
 		grpc.WithDefaultServiceConfig(serviceConfig),
 	)
 	if err != nil {
@@ -95,6 +94,11 @@ func (c *Client) Connect(ctx context.Context) error {
 		return err
 	}
 
+	c.submitBlockStream, err = c.client.SubmitBlockStream(ctx)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -105,6 +109,7 @@ func (c *Client) Close() error {
 	c.rawTxStream.CloseSend()
 	c.txSeqStream.CloseSend()
 	c.rawTxSeqStream.CloseSend()
+	c.submitBlockStream.CloseSend()
 
 	return c.conn.Close()
 }
@@ -234,6 +239,30 @@ func (c *Client) SendRawTransactionSequence(ctx context.Context, rawTransactions
 	}
 
 	return hashes, ts, nil
+}
+
+// SubmitBlock submits an SSZ encoded signed block to Fiber and returns the slot, state root and timestamp (us).
+func (c *Client) SubmitBlock(ctx context.Context, sszBlock []byte) (uint64, []byte, uint64, error) {
+	errc := make(chan error)
+
+	go func() {
+		if err := c.submitBlockStream.Send(&api.BlockSubmissionMsg{SszBlock: sszBlock}); err != nil {
+			errc <- err
+		}
+	}()
+
+	select {
+	case err := <-errc:
+		return 0, nil, 0, err
+	default:
+	}
+
+	res, err := c.submitBlockStream.Recv()
+	if err != nil {
+		return 0, nil, 0, err
+	}
+
+	return res.Slot, res.StateRoot, res.Timestamp, nil
 }
 
 // SubscribeNewTxs subscribes to new transactions, and sends transactions on the given
