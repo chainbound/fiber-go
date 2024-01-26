@@ -62,6 +62,10 @@ func (c *Client) Connect(ctx context.Context) error {
 	conn, err := grpc.DialContext(ctx, c.target,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
+		grpc.WithWriteBufferSize(1024*8),
+		grpc.WithReadBufferSize(1024*8),
+		grpc.WithInitialConnWindowSize(1024*256),
+		grpc.WithInitialWindowSize(1024*128),
 		grpc.WithDefaultServiceConfig(serviceConfig),
 	)
 	if err != nil {
