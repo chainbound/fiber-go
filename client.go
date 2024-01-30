@@ -17,14 +17,12 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/emptypb"
-
-	// Enables gzip compression
-	_ "google.golang.org/grpc/encoding/gzip"
 )
 
 type Client struct {
 	target string
 	conn   *grpc.ClientConn
+	config *ClientConfig
 	client api.APIClient
 	key    string
 
@@ -36,8 +34,58 @@ type Client struct {
 	submitBlockStream api.API_SubmitBlockStreamClient
 }
 
+type ClientConfig struct {
+	enableCompression bool
+	writeBufferSize   int
+	readBufferSize    int
+	connWindowSize    int32
+	windowSize        int32
+}
+
+// NewConfig creates a new config with sensible default values.
+func NewConfig() *ClientConfig {
+	return &ClientConfig{
+		enableCompression: false,
+		writeBufferSize:   1024 * 8,
+		readBufferSize:    1024 * 8,
+		connWindowSize:    1024 * 512,
+		windowSize:        1024 * 256,
+	}
+}
+
+func (c *ClientConfig) EnableCompression() *ClientConfig {
+	c.enableCompression = true
+	return c
+}
+
+func (c *ClientConfig) SetWriteBufferSize(size int) *ClientConfig {
+	c.writeBufferSize = size
+	return c
+}
+
+func (c *ClientConfig) SetReadBufferSize(size int) *ClientConfig {
+	c.readBufferSize = size
+	return c
+}
+
+func (c *ClientConfig) SetConnWindowSize(size int32) *ClientConfig {
+	c.connWindowSize = size
+	return c
+}
+
+func (c *ClientConfig) SetWindowSize(size int32) *ClientConfig {
+	c.windowSize = size
+	return c
+}
+
 func NewClient(target, apiKey string) *Client {
+	return NewClientWithConfig(target, apiKey, NewConfig())
+}
+
+// NewClientWithConfig creates a new client with the given config.
+func NewClientWithConfig(target, apiKey string, config *ClientConfig) *Client {
 	return &Client{
+		config: config,
 		target: target,
 		key:    apiKey,
 	}
@@ -59,14 +107,18 @@ func (c *Client) Connect(ctx context.Context) error {
 		}]
 	}`
 
+	if c.config.enableCompression {
+		registerGzipCompression()
+	}
+
 	conn, err := grpc.DialContext(ctx, c.target,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
-		grpc.WithWriteBufferSize(1024*8),
-		grpc.WithReadBufferSize(1024*8),
-		grpc.WithInitialConnWindowSize(1024*256),
-		grpc.WithInitialWindowSize(1024*128),
 		grpc.WithDefaultServiceConfig(serviceConfig),
+		grpc.WithWriteBufferSize(c.config.writeBufferSize),
+		grpc.WithReadBufferSize(c.config.readBufferSize),
+		grpc.WithInitialConnWindowSize(c.config.connWindowSize),
+		grpc.WithInitialWindowSize(c.config.windowSize),
 	)
 	if err != nil {
 		return err
@@ -104,6 +156,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	}
 
 	return nil
+
 }
 
 // Close closes all the streams and then the underlying connection. IMPORTANT: you should call this
