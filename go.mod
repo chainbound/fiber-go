@@ -5,7 +5,6 @@ go 1.18
 require (
 	github.com/ethereum/go-ethereum v1.13.11
 	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/rs/zerolog v1.31.0
 	golang.org/x/sync v0.6.0
 	google.golang.org/grpc v1.61.0
 	google.golang.org/protobuf v1.32.0
@@ -21,8 +20,6 @@ require (
 	github.com/ethereum/c-kzg-4844 v0.4.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/holiman/uint256 v1.2.4 // indirect
-	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/supranational/blst v0.3.11 // indirect
 	golang.org/x/crypto v0.18.0 // indirect
