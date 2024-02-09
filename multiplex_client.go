@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/chainbound/fiber-go/filter"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -159,8 +160,8 @@ func (mc *MultiplexClient) SendRawTransactionSequence(ctx context.Context, trans
 // channel according to the filter. This function blocks and should be called in a goroutine.
 // If there's an error receiving the new message it will close the channel and return the error.
 // It multiplexes the subscription across all clients.
-func (mc *MultiplexClient) SubscribeNewTxs(filter *filter.Filter, ch chan<- *Transaction) error {
-	mch := make(chan *Transaction)
+func (mc *MultiplexClient) SubscribeNewTxs(filter *filter.Filter, ch chan<- *TransactionWithSender) error {
+	mch := make(chan *TransactionWithSender)
 	errc := make(chan error, len(mc.clients))
 
 	for _, client := range mc.clients {
@@ -175,43 +176,12 @@ func (mc *MultiplexClient) SubscribeNewTxs(filter *filter.Filter, ch chan<- *Tra
 	for {
 		select {
 		case tx := <-mch:
-			if _, ok := mc.txCache.Get(tx.Hash); ok {
+			if _, ok := mc.txCache.Get(tx.Transaction.Hash()); ok {
 				continue
 			}
 
-			mc.txCache.Add(tx.Hash, struct{}{})
+			mc.txCache.Add(tx.Transaction.Hash(), struct{}{})
 			ch <- tx
-		case err := <-errc:
-			return err
-		}
-	}
-}
-
-// SubscribeNewHeaders subscribes to new headers, and sends headers on the given channel. This function blocks
-// and should be called in a goroutine.
-// It multiplexes the subscription across all clients.
-func (mc *MultiplexClient) SubscribeNewExecutionPayloadHeaders(ch chan<- *ExecutionPayloadHeader) error {
-	mch := make(chan *ExecutionPayloadHeader)
-	errc := make(chan error, len(mc.clients))
-
-	for _, client := range mc.clients {
-		client := client
-		go func() {
-			if err := client.SubscribeNewExecutionPayloadHeaders(mch); err != nil {
-				errc <- err
-			}
-		}()
-	}
-
-	for {
-		select {
-		case header := <-mch:
-			if _, ok := mc.headerCache.Get(header.Hash); ok {
-				continue
-			}
-
-			mc.headerCache.Add(header.Hash, struct{}{})
-			ch <- header
 		case err := <-errc:
 			return err
 		}
@@ -221,8 +191,8 @@ func (mc *MultiplexClient) SubscribeNewExecutionPayloadHeaders(ch chan<- *Execut
 // SubscribeNewBeaconHeaders subscribes to new beacon headers, and sends headers on the given channel. This function blocks
 // and should be called in a goroutine.
 // It multiplexes the subscription across all clients.
-func (mc *MultiplexClient) SubscribeNewExecutionPayloads(ch chan<- *ExecutionPayload) error {
-	mch := make(chan *ExecutionPayload)
+func (mc *MultiplexClient) SubscribeNewExecutionPayloads(ch chan<- *capella.ExecutionPayload) error {
+	mch := make(chan *capella.ExecutionPayload)
 	errc := make(chan error, len(mc.clients))
 
 	for _, client := range mc.clients {
@@ -237,11 +207,11 @@ func (mc *MultiplexClient) SubscribeNewExecutionPayloads(ch chan<- *ExecutionPay
 	for {
 		select {
 		case payload := <-mch:
-			if _, ok := mc.payloadCache.Get(payload.Header.Hash); ok {
+			if _, ok := mc.payloadCache.Get(common.Hash(payload.BlockHash)); ok {
 				continue
 			}
 
-			mc.payloadCache.Add(payload.Header.Hash, struct{}{})
+			mc.payloadCache.Add(common.Hash(payload.BlockHash), struct{}{})
 			ch <- payload
 		case err := <-errc:
 			return err
@@ -252,8 +222,8 @@ func (mc *MultiplexClient) SubscribeNewExecutionPayloads(ch chan<- *ExecutionPay
 // SubscribeNewBeaconHeaders subscribes to new beacon headers, and sends headers on the given channel. This function blocks
 // and should be called in a goroutine.
 // It multiplexes the subscription across all clients.
-func (mc *MultiplexClient) SubscribeNewBeaconBlocks(ch chan<- *BeaconBlock) error {
-	mch := make(chan *BeaconBlock)
+func (mc *MultiplexClient) SubscribeNewBeaconBlocks(ch chan<- *capella.SignedBeaconBlock) error {
+	mch := make(chan *capella.SignedBeaconBlock)
 	errc := make(chan error, len(mc.clients))
 
 	for _, client := range mc.clients {
@@ -268,11 +238,11 @@ func (mc *MultiplexClient) SubscribeNewBeaconBlocks(ch chan<- *BeaconBlock) erro
 	for {
 		select {
 		case block := <-mch:
-			if _, ok := mc.beaconCache.Get(block.StateRoot); ok {
+			if _, ok := mc.beaconCache.Get(block.Message.Body.ExecutionPayload.StateRoot); ok {
 				continue
 			}
 
-			mc.beaconCache.Add(block.StateRoot, struct{}{})
+			mc.beaconCache.Add(block.Message.Body.ExecutionPayload.StateRoot, struct{}{})
 			ch <- block
 		case err := <-errc:
 			return err
