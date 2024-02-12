@@ -75,16 +75,16 @@ func DecodeBellatrixExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, er
 		transactions = append(transactions, *tx)
 	}
 
-	basefee := new(big.Int).SetBytes(payload.BaseFeePerGas[:])
+	basefee := new(big.Int).SetBytes(reverseBytes(payload.BaseFeePerGas[:]))
+	diff, _ := new(big.Int).SetString("58750003716598352816469", 10)
 
 	header := types.Header{
 		ParentHash:  common.Hash(payload.ParentHash),
-		UncleHash:   common.Hash([32]byte{}),
 		Coinbase:    common.Address(payload.FeeRecipient),
 		Root:        payload.StateRoot,
 		ReceiptHash: common.Hash(payload.ReceiptsRoot),
 		Bloom:       payload.LogsBloom,
-		Difficulty:  nil,
+		Difficulty:  diff,
 		Number:      new(big.Int).SetUint64(payload.BlockNumber),
 		GasLimit:    payload.GasLimit,
 		GasUsed:     payload.GasUsed,
@@ -92,8 +92,9 @@ func DecodeBellatrixExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, er
 		Extra:       payload.ExtraData,
 		MixDigest:   payload.PrevRandao,
 		BaseFee:     basefee,
-		Nonce:       [8]byte{},
-		TxHash:      common.Hash{}, // TODO: this is not present in block
+		UncleHash:   common.Hash([32]byte{}), // Uncle hashes are always empty after merge
+		Nonce:       [8]byte{},               // Nonce is always 0 after merge
+		TxHash:      common.Hash{},           // TODO: this is not present in block
 	}
 
 	block := &Block{
@@ -124,16 +125,16 @@ func DecodeCapellaExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, erro
 		transactions = append(transactions, *tx)
 	}
 
-	basefee := new(big.Int).SetBytes(payload.BaseFeePerGas[:])
+	basefee := new(big.Int).SetBytes(reverseBytes(payload.BaseFeePerGas[:]))
+	diff, _ := new(big.Int).SetString("58750003716598352816469", 10)
 
 	header := types.Header{
 		ParentHash:  common.Hash(payload.ParentHash),
-		UncleHash:   common.Hash([32]byte{}),
 		Coinbase:    common.Address(payload.FeeRecipient),
 		Root:        payload.StateRoot,
 		ReceiptHash: common.Hash(payload.ReceiptsRoot),
 		Bloom:       payload.LogsBloom,
-		Difficulty:  nil,
+		Difficulty:  diff,
 		Number:      new(big.Int).SetUint64(payload.BlockNumber),
 		GasLimit:    payload.GasLimit,
 		GasUsed:     payload.GasUsed,
@@ -141,8 +142,9 @@ func DecodeCapellaExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, erro
 		Extra:       payload.ExtraData,
 		MixDigest:   payload.PrevRandao,
 		BaseFee:     basefee,
-		Nonce:       [8]byte{},
-		TxHash:      common.Hash{}, // TODO: this is not present in block
+		UncleHash:   common.Hash([32]byte{}), // Uncle hashes are always empty after merge
+		Nonce:       [8]byte{},               // Nonce is always 0 after merge
+		TxHash:      common.Hash{},           // TODO: this is not present in block
 	}
 
 	withdrawals := make([]types.Withdrawal, len(payload.Withdrawals))
@@ -184,14 +186,15 @@ func DecodeDenebExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, error)
 		transactions = append(transactions, *tx)
 	}
 
+	diff, _ := new(big.Int).SetString("58750003716598352816469", 10)
+
 	header := types.Header{
 		ParentHash:       common.Hash(payload.ParentHash),
-		UncleHash:        common.Hash([32]byte{}),
 		Coinbase:         common.Address(payload.FeeRecipient),
 		Root:             common.Hash(payload.StateRoot),
 		ReceiptHash:      common.Hash(payload.ReceiptsRoot),
 		Bloom:            payload.LogsBloom,
-		Difficulty:       nil,
+		Difficulty:       diff,
 		Number:           new(big.Int).SetUint64(payload.BlockNumber),
 		GasLimit:         payload.GasLimit,
 		GasUsed:          payload.GasUsed,
@@ -201,9 +204,10 @@ func DecodeDenebExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, error)
 		BaseFee:          payload.BaseFeePerGas.ToBig(),
 		BlobGasUsed:      &payload.BlobGasUsed,
 		ExcessBlobGas:    &payload.ExcessBlobGas,
-		Nonce:            [8]byte{},
-		TxHash:           common.Hash{},  // TODO: this is not present in block
-		ParentBeaconRoot: &common.Hash{}, // TODO: this is not present in block
+		Nonce:            [8]byte{},               // Nonce is always 0 after merge
+		UncleHash:        common.Hash([32]byte{}), // Uncle hashes are always empty after merge
+		TxHash:           common.Hash{},           // TODO: this is not present in block
+		ParentBeaconRoot: &common.Hash{},          // TODO: this is not present in block
 	}
 
 	withdrawals := make([]types.Withdrawal, len(payload.Withdrawals))
@@ -226,4 +230,12 @@ func DecodeDenebExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, error)
 	}
 
 	return block, nil
+}
+
+// reverseBytes reverses a byte slice.
+func reverseBytes(b []byte) []byte {
+	for i, j := 0, len(b)-1; i < j; i, j = i+1, j-1 {
+		b[i], b[j] = b[j], b[i]
+	}
+	return b
 }
