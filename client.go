@@ -14,7 +14,7 @@ import (
 )
 
 // Client version string that is appended to each stream request.
-const Version string = "fiber-go/1.8.3"
+const Version string = "fiber-go/1.9.0"
 
 type Client struct {
 	target string
