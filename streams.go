@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/chainbound/fiber-go/filter"
 	"github.com/chainbound/fiber-go/protobuf/api"
 	"github.com/ethereum/go-ethereum/common"
@@ -13,6 +15,20 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
+
+// All Available streams:
+//
+// - sendTransaction
+// - sendTransactionSequence
+// - sendRawTransaction
+// - sendRawTransactionSequence
+// - submitBlock
+// - subscribeNewTxs
+// - subscribeNewRawTxs
+// - subscribeNewExecutionPayloads
+// - subscribeNewRawExecutionPayloads
+// - subscribeNewBeaconBlocks
+// - subscribeNewRawBeaconBlocks
 
 // SendTransaction sends the (signed) transaction to Fibernet and returns the hash and a timestamp (us).
 // It blocks until the transaction was sent.
@@ -358,7 +374,7 @@ outer:
 // SubscribeNewBeaconBlocks subscribes to new beacon blocks, and sends blocks on the given
 // channel. This function blocks and should be called in a goroutine.
 // If there's an error receiving the new message it will close the channel and return the error.
-func (c *Client) SubscribeNewBeaconBlocks(ch chan<- *capella.SignedBeaconBlock) error {
+func (c *Client) SubscribeNewBeaconBlocks(ch chan<- *SignedBeaconBlock) error {
 	attempts := 0
 outer:
 	for {
@@ -383,13 +399,33 @@ outer:
 				continue outer
 			}
 
-			block := new(capella.SignedBeaconBlock)
-			if err := block.UnmarshalSSZ(proto.SszBlock); err != nil {
-				fmt.Println("error unmarshalling beacon block:", err)
-				continue outer
+			signedBeaconBlock := new(SignedBeaconBlock)
+			signedBeaconBlock.DataVersion = proto.DataVersion
+
+			switch proto.DataVersion {
+			case DataVersionBellatrix:
+				block := new(bellatrix.SignedBeaconBlock)
+				if err := block.UnmarshalSSZ(proto.SszBlock); err != nil {
+					continue outer
+				}
+				signedBeaconBlock.Bellatrix = block
+				ch <- signedBeaconBlock
+			case DataVersionCapella:
+				block := new(capella.SignedBeaconBlock)
+				if err := block.UnmarshalSSZ(proto.SszBlock); err != nil {
+					continue outer
+				}
+				signedBeaconBlock.Capella = block
+				ch <- signedBeaconBlock
+			case DataVersionDeneb:
+				block := new(deneb.SignedBeaconBlock)
+				if err := block.UnmarshalSSZ(proto.SszBlock); err != nil {
+					continue outer
+				}
+				signedBeaconBlock.Deneb = block
+				ch <- signedBeaconBlock
 			}
 
-			ch <- block
 		}
 	}
 }

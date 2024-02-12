@@ -7,6 +7,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/chainbound/fiber-go/protobuf/api"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -57,6 +58,45 @@ type SignedBeaconBlock struct {
 const DataVersionBellatrix uint32 = 3
 const DataVersionCapella uint32 = 4
 const DataVersionDeneb uint32 = 5
+
+func (bb *SignedBeaconBlock) StateRoot() common.Hash {
+	switch bb.DataVersion {
+	case DataVersionBellatrix:
+		return common.Hash(bb.Bellatrix.Message.StateRoot)
+	case DataVersionCapella:
+		return common.Hash(bb.Capella.Message.StateRoot)
+	case DataVersionDeneb:
+		return common.Hash(bb.Deneb.Message.StateRoot)
+	default:
+		return common.Hash{}
+	}
+}
+
+func (bb *SignedBeaconBlock) Slot() phase0.Slot {
+	switch bb.DataVersion {
+	case DataVersionBellatrix:
+		return bb.Bellatrix.Message.Slot
+	case DataVersionCapella:
+		return bb.Capella.Message.Slot
+	case DataVersionDeneb:
+		return bb.Deneb.Message.Slot
+	default:
+		return 0
+	}
+}
+
+func (bb *SignedBeaconBlock) BlockHash() []byte {
+	switch bb.DataVersion {
+	case DataVersionBellatrix:
+		return bb.Bellatrix.Message.Body.ETH1Data.BlockHash
+	case DataVersionCapella:
+		return bb.Capella.Message.Body.ETH1Data.BlockHash
+	case DataVersionDeneb:
+		return bb.Deneb.Message.Body.ETH1Data.BlockHash
+	default:
+		return []byte{}
+	}
+}
 
 func DecodeBellatrixExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, error) {
 	payload := new(bellatrix.ExecutionPayload)

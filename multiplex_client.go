@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/chainbound/fiber-go/filter"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -222,8 +221,8 @@ func (mc *MultiplexClient) SubscribeNewExecutionPayloads(ch chan<- *Block) error
 // SubscribeNewBeaconHeaders subscribes to new beacon headers, and sends headers on the given channel. This function blocks
 // and should be called in a goroutine.
 // It multiplexes the subscription across all clients.
-func (mc *MultiplexClient) SubscribeNewBeaconBlocks(ch chan<- *capella.SignedBeaconBlock) error {
-	mch := make(chan *capella.SignedBeaconBlock)
+func (mc *MultiplexClient) SubscribeNewBeaconBlocks(ch chan<- *SignedBeaconBlock) error {
+	mch := make(chan *SignedBeaconBlock)
 	errc := make(chan error, len(mc.clients))
 
 	for _, client := range mc.clients {
@@ -238,11 +237,11 @@ func (mc *MultiplexClient) SubscribeNewBeaconBlocks(ch chan<- *capella.SignedBea
 	for {
 		select {
 		case block := <-mch:
-			if _, ok := mc.beaconCache.Get(block.Message.Body.ExecutionPayload.StateRoot); ok {
+			if _, ok := mc.beaconCache.Get(block.StateRoot()); ok {
 				continue
 			}
 
-			mc.beaconCache.Add(block.Message.Body.ExecutionPayload.StateRoot, struct{}{})
+			mc.beaconCache.Add(block.StateRoot(), struct{}{})
 			ch <- block
 		case err := <-errc:
 			return err
