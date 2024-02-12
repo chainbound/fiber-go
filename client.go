@@ -14,7 +14,7 @@ import (
 )
 
 // Client version string that is appended to each stream request.
-const Version string = "fiber-go-1.8.3"
+const Version string = "fiber-go/1.8.3"
 
 type Client struct {
 	target string
@@ -123,7 +123,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	// Create the stub (client) with the channel
 	c.client = api.NewAPIClient(conn)
 
-	ctx = metadata.AppendToOutgoingContext(context.Background(), "x-api-key", c.key)
+	ctx = metadata.AppendToOutgoingContext(context.Background(), "x-api-key", c.key, "x-client-version", Version)
 	c.txStream, err = c.client.SendTransactionV2(ctx)
 	if err != nil {
 		return err

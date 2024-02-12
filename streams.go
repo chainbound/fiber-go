@@ -211,12 +211,12 @@ outer:
 
 			sender := common.BytesToAddress(proto.Sender)
 
-			txWithSender := &TransactionWithSender{
+			txWithSender := TransactionWithSender{
 				Sender:      &sender,
 				Transaction: tx,
 			}
 
-			ch <- txWithSender
+			ch <- &txWithSender
 		}
 	}
 }
@@ -260,7 +260,7 @@ outer:
 
 			rawTxWithSender := &RawTransactionWithSender{
 				Sender: &sender,
-				Data:   proto.RlpTransaction,
+				Rlp:    proto.RlpTransaction,
 			}
 
 			ch <- rawTxWithSender
@@ -271,7 +271,7 @@ outer:
 // SubscribeNewBlocks subscribes to new execution payloads, and sends blocks on the given
 // channel. This function blocks and should be called in a goroutine.
 // If there's an error receiving the new message it will close the channel and return the error.
-func (c *Client) SubscribeNewExecutionPayloads(ch chan<- *capella.ExecutionPayload) error {
+func (c *Client) SubscribeNewExecutionPayloads(ch chan<- *Block) error {
 	attempts := 0
 outer:
 	for {
@@ -297,13 +297,26 @@ outer:
 				continue outer
 			}
 
-			block := new(capella.ExecutionPayload)
-			if err := block.UnmarshalSSZ(proto.SszPayload); err != nil {
-				fmt.Println("error unmarshalling execution payload:", err)
-				continue outer
+			switch proto.DataVersion {
+			case DataVersionBellatrix:
+				block, err := DecodeBellatrixExecutionPayload(proto)
+				if err != nil {
+					continue
+				}
+				ch <- block
+			case DataVersionCapella:
+				block, err := DecodeCapellaExecutionPayload(proto)
+				if err != nil {
+					continue
+				}
+				ch <- block
+			case DataVersionDeneb:
+				block, err := DecodeDenebExecutionPayload(proto)
+				if err != nil {
+					continue
+				}
+				ch <- block
 			}
-
-			ch <- block
 		}
 	}
 }

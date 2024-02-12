@@ -191,8 +191,8 @@ func (mc *MultiplexClient) SubscribeNewTxs(filter *filter.Filter, ch chan<- *Tra
 // SubscribeNewBeaconHeaders subscribes to new beacon headers, and sends headers on the given channel. This function blocks
 // and should be called in a goroutine.
 // It multiplexes the subscription across all clients.
-func (mc *MultiplexClient) SubscribeNewExecutionPayloads(ch chan<- *capella.ExecutionPayload) error {
-	mch := make(chan *capella.ExecutionPayload)
+func (mc *MultiplexClient) SubscribeNewExecutionPayloads(ch chan<- *Block) error {
+	mch := make(chan *Block)
 	errc := make(chan error, len(mc.clients))
 
 	for _, client := range mc.clients {
@@ -207,11 +207,11 @@ func (mc *MultiplexClient) SubscribeNewExecutionPayloads(ch chan<- *capella.Exec
 	for {
 		select {
 		case payload := <-mch:
-			if _, ok := mc.payloadCache.Get(common.Hash(payload.BlockHash)); ok {
+			if _, ok := mc.payloadCache.Get(payload.Hash); ok {
 				continue
 			}
 
-			mc.payloadCache.Add(common.Hash(payload.BlockHash), struct{}{})
+			mc.payloadCache.Add(payload.Hash, struct{}{})
 			ch <- payload
 		case err := <-errc:
 			return err
