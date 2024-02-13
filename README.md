@@ -37,10 +37,13 @@ func main() {
 
 ### Subscriptions
 
-You can find some examples on how to subscribe below. `fiber-go` uses it's own
-`Transaction` struct, which you can convert to a `go-ethereum` transaction using `tx.ToNative()`.
+You can find some examples on how to subscribe below. `fiber-go` uses the familiar `go-ethereum` core types where possible,
+making it easy to integrate with existing applications.
 
 #### Transactions
+
+Transactions are returned as `*fiber.TransactionWithSender` which is a wrapper around `go-ethereum` `*types.Transaction` plus the sender's address.
+The sender address is included in the message to avoid having to recompute it from ECDSA signature recovery in the client, which can be slow.
 
 ```go
 import (
@@ -138,6 +141,8 @@ You can currently filter the following properties
 
 #### Execution Payloads (new blocks with transactions)
 
+Execution payloads are returned as `*fiber.Block` which is a wrapper around `go-ethereum` native types such as `Header`, `Transaction` and `Withdrawal`.
+
 ```go
 import (
     ...
@@ -191,6 +196,10 @@ func main() {
 #### Beacon Blocks
 
 Beacon blocks follow the [Consensus specs](https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#signedbeaconblock).
+The returned items are `*fiber.BeaconBlock` which is a wrapper around `go-eth-2` `SignedBeaconBlock` depending on the hardfork version:
+
+Each `*fiber.BeaconBlock` contains the `DataVersion` field which indicates the hardfork version of the beacon block.
+The returned type will contain either a Bellatrix (3), Capella (4) or Deneb (5) hardfork block depending on the specified DataVersion.
 
 ```go
 import (
@@ -245,6 +254,8 @@ func main() {
 ### Sending Transactions
 
 #### `SendTransaction`
+
+This method supports sending a single `go-ethereum` `*types.Transaction` object to the Fiber Network.
 
 ```go
 import (
@@ -302,6 +313,8 @@ func main() {
 ```
 
 #### `SendTransactionSequence`
+
+This method supports sending a sequence of transactions to the Fiber Network.
 
 ```go
 import (
@@ -362,6 +375,8 @@ func main() {
 ```
 
 #### `SendRawTransaction`
+
+This method supports sending a single raw, RLP-encoded transaction to the Fiber Network.
 
 ```go
 import (
@@ -424,6 +439,8 @@ func main() {
 ```
 
 #### `SendRawTransactionSequence`
+
+This method supports sending a sequence of raw, RLP-encoded transactions to the Fiber Network.
 
 ```go
 import (
