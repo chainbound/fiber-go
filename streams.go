@@ -337,40 +337,6 @@ outer:
 	}
 }
 
-// SubscribeNewRawExecutionPayloads subscribes to new SSZ-encoded raw execution payloads, and sends
-// blocks on the given channel. This function blocks and should be called in a goroutine.
-// If there's an error receiving the new message it will close the channel and return the error.
-func (c *Client) SubscribeNewRawExecutionPayloads(ch chan<- []byte) error {
-	attempts := 0
-outer:
-	for {
-		attempts++
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
-		ctx = metadata.AppendToOutgoingContext(ctx, "x-client-version", Version)
-
-		res, err := c.client.SubscribeExecutionPayloadsV2(ctx, &emptypb.Empty{})
-		if err != nil {
-			if attempts > 50 {
-				return fmt.Errorf("subscribing to raw execution payloads after 50 attempts: %w", err)
-			}
-			time.Sleep(time.Second * 2)
-			continue outer
-		}
-
-		for {
-			proto, err := res.Recv()
-			if err != nil {
-				time.Sleep(time.Second * 2)
-				continue outer
-			}
-
-			ch <- proto.SszPayload
-		}
-	}
-}
-
 // SubscribeNewBeaconBlocks subscribes to new beacon blocks, and sends blocks on the given
 // channel. This function blocks and should be called in a goroutine.
 // If there's an error receiving the new message it will close the channel and return the error.

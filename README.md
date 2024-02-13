@@ -166,33 +166,6 @@ func main() {
 }
 ```
 
-#### Raw Execution Payloads
-
-Raw execution payloads are raw, SSZ-encoded bytes that you can manually decode into [ExecutionPayloads](https://github.com/ethereum/consensus-specs/blob/dev/specs/capella/beacon-chain.md#executionpayload) in your application.
-
-```go
-import (
-    ...
-    fiber "github.com/chainbound/fiber-go"
-)
-
-func main() {
-    ...
-
-    ch := make(chan []byte)
-
-    go func() {
-        if err := client.SubscribeNewRawExecutionPayloads(ch); err != nil {
-            log.Fatal(err)
-        }
-    }()
-
-    for block := range ch {
-        handleRawPayload(block)
-    }
-}
-```
-
 #### Beacon Blocks
 
 Beacon blocks follow the [Consensus specs](https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#signedbeaconblock).
