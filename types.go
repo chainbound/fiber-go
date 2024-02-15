@@ -1,7 +1,6 @@
 package client
 
 import (
-	"fmt"
 	"math/big"
 
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
@@ -37,9 +36,9 @@ type RawTransactionWithSender struct {
 // such as Header, Transactions and Withdrawals.
 type Block struct {
 	Hash         common.Hash
-	Header       types.Header
-	Transactions []types.Transaction
-	Withdrawals  []types.Withdrawal
+	Header       *types.Header
+	Transactions []*types.Transaction
+	Withdrawals  []*types.Withdrawal
 }
 
 // Helper type that wraps a signed beacon block from any of the supported hard-forks.
@@ -102,23 +101,20 @@ func DecodeBellatrixExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, er
 	payload := new(bellatrix.ExecutionPayload)
 
 	if err := payload.UnmarshalSSZ(input.SszPayload); err != nil {
-		fmt.Println("error unmarshalling execution payload:", err)
 		return nil, err
 	}
 
-	transactions := make([]types.Transaction, len(payload.Transactions))
-	for _, rawTx := range payload.Transactions {
-		tx := new(types.Transaction)
-		if err := tx.UnmarshalBinary(rawTx); err != nil {
+	transactions := make([]*types.Transaction, len(payload.Transactions))
+	for i, rawTx := range payload.Transactions {
+		if err := transactions[i].UnmarshalBinary(rawTx); err != nil {
 			continue
 		}
-		transactions = append(transactions, *tx)
 	}
 
 	basefee := new(big.Int).SetBytes(reverseBytes(payload.BaseFeePerGas[:]))
 	diff, _ := new(big.Int).SetString("58750003716598352816469", 10)
 
-	header := types.Header{
+	header := &types.Header{
 		ParentHash:  common.Hash(payload.ParentHash),
 		Coinbase:    common.Address(payload.FeeRecipient),
 		Root:        payload.StateRoot,
@@ -142,7 +138,7 @@ func DecodeBellatrixExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, er
 		Header:       header,
 		Transactions: transactions,
 		// No withdrawals pre Capella
-		Withdrawals: []types.Withdrawal{},
+		Withdrawals: []*types.Withdrawal{},
 	}
 
 	return block, nil
@@ -152,23 +148,20 @@ func DecodeCapellaExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, erro
 	payload := new(capella.ExecutionPayload)
 
 	if err := payload.UnmarshalSSZ(input.SszPayload); err != nil {
-		fmt.Println("error unmarshalling execution payload:", err)
 		return nil, err
 	}
 
-	transactions := make([]types.Transaction, len(payload.Transactions))
-	for _, rawTx := range payload.Transactions {
-		tx := new(types.Transaction)
-		if err := tx.UnmarshalBinary(rawTx); err != nil {
+	transactions := make([]*types.Transaction, len(payload.Transactions))
+	for i, rawTx := range payload.Transactions {
+		if err := transactions[i].UnmarshalBinary(rawTx); err != nil {
 			continue
 		}
-		transactions = append(transactions, *tx)
 	}
 
 	basefee := new(big.Int).SetBytes(reverseBytes(payload.BaseFeePerGas[:]))
 	diff, _ := new(big.Int).SetString("58750003716598352816469", 10)
 
-	header := types.Header{
+	header := &types.Header{
 		ParentHash:  common.Hash(payload.ParentHash),
 		Coinbase:    common.Address(payload.FeeRecipient),
 		Root:        payload.StateRoot,
@@ -187,16 +180,14 @@ func DecodeCapellaExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, erro
 		TxHash:      common.Hash{},           // TODO: this is not present in block
 	}
 
-	withdrawals := make([]types.Withdrawal, len(payload.Withdrawals))
-	for _, withdrawal := range payload.Withdrawals {
-		wd := types.Withdrawal{
+	withdrawals := make([]*types.Withdrawal, len(payload.Withdrawals))
+	for i, withdrawal := range payload.Withdrawals {
+		withdrawals[i] = &types.Withdrawal{
 			Index:     uint64(withdrawal.Index),
 			Validator: uint64(withdrawal.ValidatorIndex),
 			Address:   common.Address(withdrawal.Address),
 			Amount:    uint64(withdrawal.Amount),
 		}
-
-		withdrawals = append(withdrawals, wd)
 	}
 
 	block := &Block{
@@ -213,22 +204,19 @@ func DecodeDenebExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, error)
 	payload := new(deneb.ExecutionPayload)
 
 	if err := payload.UnmarshalSSZ(input.SszPayload); err != nil {
-		fmt.Println("error unmarshalling execution payload:", err)
 		return nil, err
 	}
 
-	transactions := make([]types.Transaction, len(payload.Transactions))
-	for _, rawTx := range payload.Transactions {
-		tx := new(types.Transaction)
-		if err := tx.UnmarshalBinary(rawTx); err != nil {
+	transactions := make([]*types.Transaction, len(payload.Transactions))
+	for i, rawTx := range payload.Transactions {
+		if err := transactions[i].UnmarshalBinary(rawTx); err != nil {
 			continue
 		}
-		transactions = append(transactions, *tx)
 	}
 
 	diff, _ := new(big.Int).SetString("58750003716598352816469", 10)
 
-	header := types.Header{
+	header := &types.Header{
 		ParentHash:       common.Hash(payload.ParentHash),
 		Coinbase:         common.Address(payload.FeeRecipient),
 		Root:             common.Hash(payload.StateRoot),
@@ -250,16 +238,14 @@ func DecodeDenebExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, error)
 		ParentBeaconRoot: &common.Hash{},          // TODO: this is not present in block
 	}
 
-	withdrawals := make([]types.Withdrawal, len(payload.Withdrawals))
-	for _, withdrawal := range payload.Withdrawals {
-		wd := types.Withdrawal{
+	withdrawals := make([]*types.Withdrawal, len(payload.Withdrawals))
+	for i, withdrawal := range payload.Withdrawals {
+		withdrawals[i] = &types.Withdrawal{
 			Index:     uint64(withdrawal.Index),
 			Validator: uint64(withdrawal.ValidatorIndex),
 			Address:   common.Address(withdrawal.Address),
 			Amount:    uint64(withdrawal.Amount),
 		}
-
-		withdrawals = append(withdrawals, wd)
 	}
 
 	block := &Block{
