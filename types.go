@@ -1,516 +1,281 @@
 package client
 
 import (
-	"bytes"
+	"fmt"
 	"math/big"
 
-	"github.com/chainbound/fiber-go/protobuf/eth"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/chainbound/fiber-go/protobuf/api"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// ==================== TRANSACTION ====================
-
-type Transaction struct {
-	ChainID     uint32
-	To          *common.Address
-	From        common.Address
-	Gas         uint64
-	GasPrice    *big.Int
-	Hash        common.Hash
-	Input       []byte
-	Value       *big.Int
-	Nonce       uint64
-	Type        uint32
-	MaxFee      *big.Int
-	PriorityFee *big.Int
-	V           uint64
-	R           []byte
-	S           []byte
-	AccessList  types.AccessList
+// Helper type that wraps a transaction and its sender.
+//
+// The sender address is included separately even though it could be calculated
+// via ECDSA recovery from the raw RLP transaction bytes. The reason for this is
+// that the recovery process is CPU-bound and takes time (order of magnitude of ~200 μs)
+type TransactionWithSender struct {
+	Sender      *common.Address
+	Transaction *types.Transaction
 }
 
-func (tx *Transaction) ToNative() *types.Transaction {
-	switch tx.Type {
-	case 0:
-		return types.NewTx(&types.LegacyTx{
-			Nonce:    tx.Nonce,
-			GasPrice: tx.GasPrice,
-			Gas:      tx.Gas,
-			To:       tx.To,
-			Value:    tx.Value,
-			Data:     tx.Input,
-			V:        big.NewInt(int64(tx.V)),
-			R:        new(big.Int).SetBytes(tx.R),
-			S:        new(big.Int).SetBytes(tx.S),
-		})
-	case 1:
-		return types.NewTx(&types.AccessListTx{
-			ChainID:    big.NewInt(int64(tx.ChainID)),
-			Nonce:      tx.Nonce,
-			GasPrice:   tx.GasPrice,
-			Gas:        tx.Gas,
-			To:         tx.To,
-			Value:      tx.Value,
-			Data:       tx.Input,
-			AccessList: tx.AccessList,
-			V:          big.NewInt(int64(tx.V)),
-			R:          new(big.Int).SetBytes(tx.R),
-			S:          new(big.Int).SetBytes(tx.S),
-		})
-	case 2:
-		return types.NewTx(&types.DynamicFeeTx{
-			ChainID:    big.NewInt(int64(tx.ChainID)),
-			AccessList: tx.AccessList,
-			Nonce:      tx.Nonce,
-			GasFeeCap:  tx.MaxFee,
-			GasTipCap:  tx.PriorityFee,
-			Gas:        tx.Gas,
-			To:         tx.To,
-			Value:      tx.Value,
-			Data:       tx.Input,
-			V:          big.NewInt(int64(tx.V)),
-			R:          new(big.Int).SetBytes(tx.R),
-			S:          new(big.Int).SetBytes(tx.S),
-		})
+// Helper type that wraps a raw, RLP-encoded transaction  and its sender.
+//
+// The sender address is included separately even though it could be calculated
+// via ECDSA recovery from the raw RLP transaction bytes. The reason for this is
+// that the recovery process is CPU-bound and takes time (order of magnitude of ~200 μs)
+type RawTransactionWithSender struct {
+	Sender *common.Address
+	Rlp    []byte
+}
+
+// Helper type that wraps go-ethereum core primitives for an Ethereum block,
+// such as Header, Transactions and Withdrawals.
+type Block struct {
+	Hash         common.Hash
+	Header       types.Header
+	Transactions []types.Transaction
+	Withdrawals  []types.Withdrawal
+}
+
+// Helper type that wraps a signed beacon block from any of the supported hard-forks.
+//
+// This type will either contain a Bellatrix, Capella, or Deneb signed beacon block.
+//
+// DataVersion is used to indicate which type of payload is contained in the struct:
+// 3: Bellatrix, 4: Capella, 5: Deneb
+type SignedBeaconBlock struct {
+	DataVersion uint32
+	Bellatrix   *bellatrix.SignedBeaconBlock
+	Capella     *capella.SignedBeaconBlock
+	Deneb       *deneb.SignedBeaconBlock
+}
+
+const DataVersionBellatrix uint32 = 3
+const DataVersionCapella uint32 = 4
+const DataVersionDeneb uint32 = 5
+
+func (bb *SignedBeaconBlock) StateRoot() common.Hash {
+	switch bb.DataVersion {
+	case DataVersionBellatrix:
+		return common.Hash(bb.Bellatrix.Message.StateRoot)
+	case DataVersionCapella:
+		return common.Hash(bb.Capella.Message.StateRoot)
+	case DataVersionDeneb:
+		return common.Hash(bb.Deneb.Message.StateRoot)
+	default:
+		return common.Hash{}
 	}
-
-	return nil
 }
 
-// TxToProto converts a go-ethereum transaction to a protobuf transaction.
-func TxToProto(tx *types.Transaction) (*eth.Transaction, error) {
-	signer := types.NewLondonSigner(common.Big1)
-	sender, err := types.Sender(signer, tx)
-	if err != nil {
+func (bb *SignedBeaconBlock) Slot() phase0.Slot {
+	switch bb.DataVersion {
+	case DataVersionBellatrix:
+		return bb.Bellatrix.Message.Slot
+	case DataVersionCapella:
+		return bb.Capella.Message.Slot
+	case DataVersionDeneb:
+		return bb.Deneb.Message.Slot
+	default:
+		return 0
+	}
+}
+
+func (bb *SignedBeaconBlock) BlockHash() []byte {
+	switch bb.DataVersion {
+	case DataVersionBellatrix:
+		return bb.Bellatrix.Message.Body.ETH1Data.BlockHash
+	case DataVersionCapella:
+		return bb.Capella.Message.Body.ETH1Data.BlockHash
+	case DataVersionDeneb:
+		return bb.Deneb.Message.Body.ETH1Data.BlockHash
+	default:
+		return []byte{}
+	}
+}
+
+func DecodeBellatrixExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, error) {
+	payload := new(bellatrix.ExecutionPayload)
+
+	if err := payload.UnmarshalSSZ(input.SszPayload); err != nil {
+		fmt.Println("error unmarshalling execution payload:", err)
 		return nil, err
 	}
 
-	var to []byte
-	if tx.To() != nil {
-		to = tx.To().Bytes()
-	}
-
-	var acl []*eth.AccessTuple
-	if tx.Type() != 0 {
-		if len(tx.AccessList()) > 0 {
-			acl = make([]*eth.AccessTuple, len(tx.AccessList()))
-			for i, tuple := range tx.AccessList() {
-				acl[i] = &eth.AccessTuple{
-					Address: tuple.Address.Bytes(),
-				}
-
-				storageKeys := make([][]byte, len(tuple.StorageKeys))
-				for j, key := range tuple.StorageKeys {
-					storageKeys[j] = key.Bytes()
-				}
-			}
+	transactions := make([]types.Transaction, len(payload.Transactions))
+	for _, rawTx := range payload.Transactions {
+		tx := new(types.Transaction)
+		if err := tx.UnmarshalBinary(rawTx); err != nil {
+			continue
 		}
+		transactions = append(transactions, *tx)
 	}
 
-	v, r, s := tx.RawSignatureValues()
-	return &eth.Transaction{
-		ChainId:     uint32(tx.ChainId().Uint64()),
-		To:          to,
-		Gas:         tx.Gas(),
-		GasPrice:    tx.GasPrice().Uint64(),
-		MaxFee:      tx.GasFeeCap().Uint64(),
-		PriorityFee: tx.GasTipCap().Uint64(),
-		Hash:        tx.Hash().Bytes(),
-		Input:       tx.Data(),
-		Nonce:       tx.Nonce(),
-		Value:       tx.Value().Bytes(),
-		From:        sender.Bytes(),
-		Type:        uint32(tx.Type()),
-		V:           v.Uint64(),
-		R:           r.Bytes(),
-		S:           s.Bytes(),
-		AccessList:  acl,
-	}, nil
+	basefee := new(big.Int).SetBytes(reverseBytes(payload.BaseFeePerGas[:]))
+	diff, _ := new(big.Int).SetString("58750003716598352816469", 10)
+
+	header := types.Header{
+		ParentHash:  common.Hash(payload.ParentHash),
+		Coinbase:    common.Address(payload.FeeRecipient),
+		Root:        payload.StateRoot,
+		ReceiptHash: common.Hash(payload.ReceiptsRoot),
+		Bloom:       payload.LogsBloom,
+		Difficulty:  diff,
+		Number:      new(big.Int).SetUint64(payload.BlockNumber),
+		GasLimit:    payload.GasLimit,
+		GasUsed:     payload.GasUsed,
+		Time:        payload.Timestamp,
+		Extra:       payload.ExtraData,
+		MixDigest:   payload.PrevRandao,
+		BaseFee:     basefee,
+		UncleHash:   common.Hash([32]byte{}), // Uncle hashes are always empty after merge
+		Nonce:       [8]byte{},               // Nonce is always 0 after merge
+		TxHash:      common.Hash{},           // TODO: this is not present in block
+	}
+
+	block := &Block{
+		Hash:         common.Hash(payload.BlockHash),
+		Header:       header,
+		Transactions: transactions,
+		// No withdrawals pre Capella
+		Withdrawals: []types.Withdrawal{},
+	}
+
+	return block, nil
 }
 
-// ProtoToTx converts a protobuf transaction to a go-ethereum transaction.
-func ProtoToTx(proto *eth.Transaction) *Transaction {
-	to := new(common.Address)
+func DecodeCapellaExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, error) {
+	payload := new(capella.ExecutionPayload)
 
-	if len(proto.To) > 0 {
-		to = (*common.Address)(proto.To)
-	} else {
-		// for contract creations, the to address must be nil
-		// otherwise the RLP encoding will be invalid
-		to = nil
+	if err := payload.UnmarshalSSZ(input.SszPayload); err != nil {
+		fmt.Println("error unmarshalling execution payload:", err)
+		return nil, err
 	}
 
-	var acl []types.AccessTuple
-	if len(proto.AccessList) > 0 {
-		acl = make([]types.AccessTuple, len(proto.AccessList))
-		for i, tuple := range proto.AccessList {
-			storageKeys := make([]common.Hash, len(tuple.StorageKeys))
-
-			for j, key := range tuple.StorageKeys {
-				storageKeys[j] = common.BytesToHash(key)
-			}
-
-			acl[i] = types.AccessTuple{
-				Address:     common.BytesToAddress(tuple.Address),
-				StorageKeys: storageKeys,
-			}
+	transactions := make([]types.Transaction, len(payload.Transactions))
+	for _, rawTx := range payload.Transactions {
+		tx := new(types.Transaction)
+		if err := tx.UnmarshalBinary(rawTx); err != nil {
+			continue
 		}
+		transactions = append(transactions, *tx)
 	}
 
-	if proto.Type > 0 {
-		if proto.V > 1 {
-			proto.V = proto.V - 37
+	basefee := new(big.Int).SetBytes(reverseBytes(payload.BaseFeePerGas[:]))
+	diff, _ := new(big.Int).SetString("58750003716598352816469", 10)
+
+	header := types.Header{
+		ParentHash:  common.Hash(payload.ParentHash),
+		Coinbase:    common.Address(payload.FeeRecipient),
+		Root:        payload.StateRoot,
+		ReceiptHash: common.Hash(payload.ReceiptsRoot),
+		Bloom:       payload.LogsBloom,
+		Difficulty:  diff,
+		Number:      new(big.Int).SetUint64(payload.BlockNumber),
+		GasLimit:    payload.GasLimit,
+		GasUsed:     payload.GasUsed,
+		Time:        payload.Timestamp,
+		Extra:       payload.ExtraData,
+		MixDigest:   payload.PrevRandao,
+		BaseFee:     basefee,
+		UncleHash:   common.Hash([32]byte{}), // Uncle hashes are always empty after merge
+		Nonce:       [8]byte{},               // Nonce is always 0 after merge
+		TxHash:      common.Hash{},           // TODO: this is not present in block
+	}
+
+	withdrawals := make([]types.Withdrawal, len(payload.Withdrawals))
+	for _, withdrawal := range payload.Withdrawals {
+		wd := types.Withdrawal{
+			Index:     uint64(withdrawal.Index),
+			Validator: uint64(withdrawal.ValidatorIndex),
+			Address:   common.Address(withdrawal.Address),
+			Amount:    uint64(withdrawal.Amount),
 		}
+
+		withdrawals = append(withdrawals, wd)
 	}
 
-	value := new(big.Int)
-	if len(proto.Value) > 0 {
-		if err := rlp.Decode(bytes.NewReader(proto.Value), value); err != nil {
-			return nil
+	block := &Block{
+		Hash:         common.Hash(payload.BlockHash),
+		Header:       header,
+		Transactions: transactions,
+		Withdrawals:  withdrawals,
+	}
+
+	return block, nil
+}
+
+func DecodeDenebExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, error) {
+	payload := new(deneb.ExecutionPayload)
+
+	if err := payload.UnmarshalSSZ(input.SszPayload); err != nil {
+		fmt.Println("error unmarshalling execution payload:", err)
+		return nil, err
+	}
+
+	transactions := make([]types.Transaction, len(payload.Transactions))
+	for _, rawTx := range payload.Transactions {
+		tx := new(types.Transaction)
+		if err := tx.UnmarshalBinary(rawTx); err != nil {
+			continue
 		}
-	} else {
-		value = big.NewInt(0)
+		transactions = append(transactions, *tx)
 	}
 
-	return &Transaction{
-		ChainID:     proto.ChainId,
-		Type:        proto.Type,
-		Nonce:       proto.Nonce,
-		GasPrice:    big.NewInt(int64(proto.GasPrice)),
-		MaxFee:      big.NewInt(int64(proto.MaxFee)),
-		PriorityFee: big.NewInt(int64(proto.PriorityFee)),
-		Gas:         proto.Gas,
-		To:          to,
-		From:        common.BytesToAddress(proto.From),
-		Hash:        common.BytesToHash(proto.Hash),
-		Value:       value,
-		Input:       proto.Input,
-		V:           proto.V,
-		R:           proto.R,
-		S:           proto.S,
-		AccessList:  acl,
-	}
-}
+	diff, _ := new(big.Int).SetString("58750003716598352816469", 10)
 
-// ==================== EXECUTION PAYLOAD ====================
-
-type ExecutionPayloadHeader struct {
-	Number        uint64
-	Hash          common.Hash
-	ParentHash    common.Hash
-	PrevRandao    common.Hash
-	StateRoot     common.Hash
-	ReceiptRoot   common.Hash
-	FeeRecipient  common.Address
-	ExtraData     []byte
-	GasLimit      uint64
-	GasUsed       uint64
-	Timestamp     uint64
-	LogsBloom     types.Bloom
-	BaseFeePerGas *big.Int
-}
-
-type ExecutionPayload struct {
-	Header       *ExecutionPayloadHeader
-	Transactions []*Transaction
-}
-
-func ProtoToHeader(proto *eth.ExecutionPayloadHeader) *ExecutionPayloadHeader {
-	return &ExecutionPayloadHeader{
-		Number:        proto.BlockNumber,
-		Hash:          common.BytesToHash(proto.BlockHash),
-		ParentHash:    common.BytesToHash(proto.ParentHash),
-		StateRoot:     common.BytesToHash(proto.StateRoot),
-		ReceiptRoot:   common.BytesToHash(proto.ReceiptsRoot),
-		PrevRandao:    common.BytesToHash(proto.PrevRandao),
-		LogsBloom:     types.BytesToBloom(proto.LogsBloom),
-		GasLimit:      proto.GasLimit,
-		GasUsed:       proto.GasUsed,
-		Timestamp:     proto.Timestamp,
-		ExtraData:     proto.ExtraData,
-		FeeRecipient:  common.BytesToAddress(proto.FeeRecipient),
-		BaseFeePerGas: new(big.Int).SetBytes(proto.BaseFeePerGas),
-	}
-}
-
-func ProtoToBlock(proto *eth.ExecutionPayload) *ExecutionPayload {
-	header := proto.Header
-	txs := make([]*Transaction, len(proto.Transactions))
-	for i, proto := range proto.Transactions {
-		txs[i] = ProtoToTx(proto)
+	header := types.Header{
+		ParentHash:       common.Hash(payload.ParentHash),
+		Coinbase:         common.Address(payload.FeeRecipient),
+		Root:             common.Hash(payload.StateRoot),
+		ReceiptHash:      common.Hash(payload.ReceiptsRoot),
+		Bloom:            payload.LogsBloom,
+		Difficulty:       diff,
+		Number:           new(big.Int).SetUint64(payload.BlockNumber),
+		GasLimit:         payload.GasLimit,
+		GasUsed:          payload.GasUsed,
+		Time:             payload.Timestamp,
+		Extra:            payload.ExtraData,
+		MixDigest:        payload.PrevRandao,
+		BaseFee:          payload.BaseFeePerGas.ToBig(),
+		BlobGasUsed:      &payload.BlobGasUsed,
+		ExcessBlobGas:    &payload.ExcessBlobGas,
+		Nonce:            [8]byte{},               // Nonce is always 0 after merge
+		UncleHash:        common.Hash([32]byte{}), // Uncle hashes are always empty after merge
+		TxHash:           common.Hash{},           // TODO: this is not present in block
+		ParentBeaconRoot: &common.Hash{},          // TODO: this is not present in block
 	}
 
-	return &ExecutionPayload{
-		Header:       ProtoToHeader(header),
-		Transactions: txs,
-	}
-}
-
-// ==================== BEACON BLOCK ====================
-
-type BeaconBlock struct {
-	Slot          uint64
-	ProposerIndex uint64
-	ParentRoot    common.Hash
-	StateRoot     common.Hash
-	Body          *BeaconBlockBody
-}
-
-type BeaconBlockBody struct {
-	RandaoReveal              common.Hash
-	Eth1Data                  *Eth1Data
-	Graffiti                  common.Hash
-	ProposerSlashingsList     []ProposerSlashing
-	AttesterSlashingsList     []AttesterSlashing
-	AttestationsList          []Attestation
-	DepositsList              []Deposit
-	VoluntaryExitsList        []VoluntaryExit
-	SyncAggregate             *SyncAggregate
-	BlsToExecutionChangesList []ExecutionChange
-}
-
-type Eth1Data struct {
-	DepositRoot  common.Hash
-	DepositCount uint64
-	BlockHash    common.Hash
-}
-
-type ProposerSlashing struct {
-	Header1 *SignedBeaconBlockHeader
-	Header2 *SignedBeaconBlockHeader
-}
-
-type SignedBeaconBlockHeader struct {
-	Message   *BeaconBlockHeader
-	Signature common.Hash
-}
-
-type BeaconBlockHeader struct {
-	Slot          uint64
-	ProposerIndex uint64
-	ParentRoot    common.Hash
-	StateRoot     common.Hash
-	BodyRoot      common.Hash
-}
-
-type AttesterSlashing struct {
-	Attestation1 *IndexedAttestation
-	Attestation2 *IndexedAttestation
-}
-
-type IndexedAttestation struct {
-	AttestingIndicesList []uint64
-	Data                 *AttestationData
-	Signature            common.Hash
-}
-
-type AttestationData struct {
-	Slot            uint64
-	Index           uint64
-	BeaconBlockRoot common.Hash
-	Source          *Checkpoint
-	Target          *Checkpoint
-}
-
-type Checkpoint struct {
-	Epoch uint64
-	Root  common.Hash
-}
-
-type Attestation struct {
-	AggregationBits common.Hash
-	Data            *AttestationData
-	Signature       common.Hash
-}
-
-type Deposit struct {
-	ProofList []common.Hash
-	Data      *DepositData
-}
-
-type DepositData struct {
-	Pubkey                common.Hash
-	WithdrawalCredentials common.Hash
-	Amount                uint64
-	Signature             common.Hash
-}
-
-type VoluntaryExit struct {
-	Message   *VoluntaryExitMessage
-	Signature common.Hash
-}
-
-type VoluntaryExitMessage struct {
-	Epoch          uint64
-	ValidatorIndex uint64
-}
-
-type SyncAggregate struct {
-	SyncCommitteeBits      common.Hash
-	SyncCommitteeSignature common.Hash
-}
-
-type ExecutionChange struct {
-	Message   *ExecutionChangeMessage
-	Signature common.Hash
-}
-
-type ExecutionChangeMessage struct {
-	ValidatorIndex     uint64
-	FromBlsPubkey      common.Hash
-	ToExecutionAddress common.Hash
-}
-
-func ProtoToBeaconBlock(block *eth.CompactBeaconBlock) *BeaconBlock {
-	body := block.GetBody()
-
-	beacon := BeaconBlock{
-		Slot:          block.GetSlot(),
-		ProposerIndex: block.GetProposerIndex(),
-		ParentRoot:    common.BytesToHash(block.GetParentRoot()),
-		StateRoot:     common.BytesToHash(block.GetStateRoot()),
-		Body: &BeaconBlockBody{
-			RandaoReveal: common.BytesToHash(body.GetRandaoReveal()),
-			Eth1Data: &Eth1Data{
-				DepositRoot:  common.BytesToHash(body.GetEth1Data().GetDepositRoot()),
-				DepositCount: body.GetEth1Data().GetDepositCount(),
-				BlockHash:    common.BytesToHash(body.GetEth1Data().GetBlockHash()),
-			},
-			Graffiti: common.BytesToHash(body.GetGraffiti()),
-		},
-	}
-
-	for _, slashing := range body.GetProposerSlashings() {
-		beacon.Body.ProposerSlashingsList = append(beacon.Body.ProposerSlashingsList, fromProtoProposerSlashing(slashing))
-	}
-	for _, slashing := range body.GetAttesterSlashings() {
-		beacon.Body.AttesterSlashingsList = append(beacon.Body.AttesterSlashingsList, fromProtoAttesterSlashing(slashing))
-	}
-	for _, attestation := range body.GetAttestations() {
-		beacon.Body.AttestationsList = append(beacon.Body.AttestationsList, fromProtoAttestation(attestation))
-	}
-	for _, deposit := range body.GetDeposits() {
-		beacon.Body.DepositsList = append(beacon.Body.DepositsList, fromProtoDeposit(deposit))
-	}
-	for _, exit := range body.GetVoluntaryExits() {
-		beacon.Body.VoluntaryExitsList = append(beacon.Body.VoluntaryExitsList, fromProtoVoluntaryExit(exit))
-	}
-
-	syncAggregate := body.GetSyncAggregate()
-	if syncAggregate != nil {
-		beacon.Body.SyncAggregate = &SyncAggregate{
-			SyncCommitteeBits:      common.BytesToHash(syncAggregate.GetSyncCommitteeBits()),
-			SyncCommitteeSignature: common.BytesToHash(syncAggregate.GetSyncCommitteeSignature()),
+	withdrawals := make([]types.Withdrawal, len(payload.Withdrawals))
+	for _, withdrawal := range payload.Withdrawals {
+		wd := types.Withdrawal{
+			Index:     uint64(withdrawal.Index),
+			Validator: uint64(withdrawal.ValidatorIndex),
+			Address:   common.Address(withdrawal.Address),
+			Amount:    uint64(withdrawal.Amount),
 		}
+
+		withdrawals = append(withdrawals, wd)
 	}
 
-	for _, change := range body.GetBlsToExecutionChanges() {
-		beacon.Body.BlsToExecutionChangesList = append(beacon.Body.BlsToExecutionChangesList, ExecutionChange{
-			Message: &ExecutionChangeMessage{
-				ValidatorIndex:     change.GetMessage().GetValidatorIndex(),
-				FromBlsPubkey:      common.BytesToHash(change.GetMessage().GetFromBlsPubkey()),
-				ToExecutionAddress: common.BytesToHash(change.GetMessage().GetToExecutionAddress()),
-			},
-			Signature: common.BytesToHash(change.GetSignature()),
-		})
+	block := &Block{
+		Hash:         common.Hash(payload.BlockHash),
+		Header:       header,
+		Transactions: transactions,
+		Withdrawals:  withdrawals,
 	}
 
-	return &beacon
+	return block, nil
 }
 
-func fromProtoProposerSlashing(slashing *eth.ProposerSlashing) ProposerSlashing {
-	return ProposerSlashing{
-		Header1: fromProtoSignedBeaconBlockHeader(slashing.GetHeader_1()),
-		Header2: fromProtoSignedBeaconBlockHeader(slashing.GetHeader_2()),
+// reverseBytes reverses a byte slice.
+func reverseBytes(b []byte) []byte {
+	for i, j := 0, len(b)-1; i < j; i, j = i+1, j-1 {
+		b[i], b[j] = b[j], b[i]
 	}
-}
-
-func fromProtoSignedBeaconBlockHeader(header *eth.SignedBeaconBlockHeader) *SignedBeaconBlockHeader {
-	return &SignedBeaconBlockHeader{
-		Message:   fromProtoBeaconBlockHeader(header.GetMessage()),
-		Signature: common.BytesToHash(header.GetSignature()),
-	}
-}
-
-func fromProtoBeaconBlockHeader(header *eth.BeaconBlockHeader) *BeaconBlockHeader {
-	return &BeaconBlockHeader{
-		Slot:          header.GetSlot(),
-		ProposerIndex: header.GetProposerIndex(),
-		ParentRoot:    common.BytesToHash(header.GetParentRoot()),
-		StateRoot:     common.BytesToHash(header.GetStateRoot()),
-		BodyRoot:      common.BytesToHash(header.GetBodyRoot()),
-	}
-}
-
-func fromProtoAttesterSlashing(slashing *eth.AttesterSlashing) AttesterSlashing {
-	return AttesterSlashing{
-		Attestation1: fromProtoIndexedAttestation(slashing.GetAttestation_1()),
-		Attestation2: fromProtoIndexedAttestation(slashing.GetAttestation_2()),
-	}
-}
-
-func fromProtoIndexedAttestation(attestation *eth.IndexedAttestation) *IndexedAttestation {
-	return &IndexedAttestation{
-		AttestingIndicesList: attestation.GetAttestingIndices(),
-		Data:                 fromProtoAttestationData(attestation.GetData()),
-		Signature:            common.BytesToHash(attestation.GetSignature()),
-	}
-}
-
-func fromProtoAttestationData(data *eth.AttestationData) *AttestationData {
-	return &AttestationData{
-		Slot:            data.GetSlot(),
-		Index:           data.GetIndex(),
-		BeaconBlockRoot: common.BytesToHash(data.GetBeaconBlockRoot()),
-		Source:          fromProtoCheckpoint(data.GetSource()),
-		Target:          fromProtoCheckpoint(data.GetTarget()),
-	}
-}
-
-func fromProtoCheckpoint(checkpoint *eth.Checkpoint) *Checkpoint {
-	return &Checkpoint{
-		Epoch: checkpoint.GetEpoch(),
-		Root:  common.BytesToHash(checkpoint.GetRoot()),
-	}
-}
-
-func fromProtoAttestation(attestation *eth.Attestation) Attestation {
-	return Attestation{
-		AggregationBits: common.BytesToHash(attestation.GetAggregationBits()),
-		Data:            fromProtoAttestationData(attestation.GetData()),
-		Signature:       common.BytesToHash(attestation.GetSignature()),
-	}
-}
-
-func fromProtoDeposit(deposit *eth.Deposit) Deposit {
-	var proofs []common.Hash
-	for _, proof := range deposit.GetProof() {
-		proofs = append(proofs, common.BytesToHash(proof))
-	}
-
-	return Deposit{
-		ProofList: proofs,
-		Data:      fromProtoDepositData(deposit.GetData()),
-	}
-}
-
-func fromProtoDepositData(data *eth.DepositData) *DepositData {
-	return &DepositData{
-		Pubkey:                common.BytesToHash(data.GetPubkey()),
-		WithdrawalCredentials: common.BytesToHash(data.GetWithdrawalCredentials()),
-		Amount:                data.GetAmount(),
-		Signature:             common.BytesToHash(data.GetSignature()),
-	}
-}
-
-func fromProtoVoluntaryExit(exit *eth.SignedVoluntaryExit) VoluntaryExit {
-	return VoluntaryExit{
-		Message: &VoluntaryExitMessage{
-			Epoch:          exit.GetMessage().GetEpoch(),
-			ValidatorIndex: exit.GetMessage().GetValidatorIndex(),
-		},
-		Signature: common.BytesToHash(exit.GetSignature()),
-	}
+	return b
 }

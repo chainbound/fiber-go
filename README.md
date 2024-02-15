@@ -1,13 +1,17 @@
 # `fiber-go`
+
 Go client package for interacting with Fiber Network.
 
 ## Installation
+
 ```bash
 go get github.com/chainbound/fiber-go
 ```
 
 ## Usage
+
 ### Connecting
+
 ```go
 import (
     "context"
@@ -32,15 +36,21 @@ func main() {
 ```
 
 ### Subscriptions
-You can find some examples on how to subscribe below. `fiber-go` uses it's own
-`Transaction` struct, which you can convert to a `go-ethereum` transaction using `tx.ToNative()`.
+
+You can find some examples on how to subscribe below. `fiber-go` uses the familiar `go-ethereum` core types where possible,
+making it easy to integrate with existing applications.
+
 #### Transactions
+
+Transactions are returned as `*fiber.TransactionWithSender` which is a wrapper around `go-ethereum` `*types.Transaction` plus the sender's address.
+The sender address is included in the message to avoid having to recompute it from ECDSA signature recovery in the client, which can be slow.
+
 ```go
 import (
     "context"
     "log"
     "time"
-    
+
     fiber "github.com/chainbound/fiber-go"
     "github.com/chainbound/fiber-go/filter"
     "github.com/chainbound/fiber-go/protobuf/api"
@@ -58,22 +68,24 @@ func main() {
         log.Fatal(err)
     }
 
-    ch := make(chan *fiber.Transaction)
+    ch := make(chan *fiber.TransactionWithSender)
     go func() {
         if err := client.SubscribeNewTxs(nil, ch); err != nil {
             log.Fatal(err)
         }
     }()
 
-    for tx := range ch {
-        handleTransaction(tx)
+    for message := range ch {
+        handleTransaction(message.Transaction)
     }
 }
 ```
 
 #### Filtering
+
 The first argument to `SubscribeNewTxs` is a filter, which can be `nil` if you want to get all transactions.
 A filter can be built with the `filter` package:
+
 ```go
 import (
     ...
@@ -92,10 +104,10 @@ func main() {
 
     // example 2: all transactions with a value greater than or equal to 1 ETH
     f := filter.New(filter.ValueGte(big.NewInt(1) * big.NewInt(1e18)))
-    
+
     // example 3: all transactions with a value equal to 1 ETH
     f := filter.New(filter.ValueEq(big.NewInt(1) * big.NewInt(1e18)))
-    
+
     // example 4: all transactions with a value less than or equal to 1 ETH
     f := filter.New(filter.ValueLte(big.NewInt(1) * big.NewInt(1e18)))
 
@@ -108,7 +120,7 @@ func main() {
         ),
     ))
 
-    ch := make(chan *fiber.Transaction)
+    ch := make(chan *fiber.TransactionWithSender)
     go func() {
         // apply filter
         if err := client.SubscribeNewTxs(f, ch); err != nil {
@@ -119,36 +131,18 @@ func main() {
     ...
 }
 ```
+
 You can currently filter the following properties
-* To
-* From
-* MethodID
-* Value (greater than, less than, equal to)
-#### Execution Headers (new block headers)
-```go
-import (
-    ...
-    fiber "github.com/chainbound/fiber-go"
-)
 
-func main() {
-    ...
-
-    ch := make(chan *fiber.ExecutionPayloadHeader)
-
-    go func() {
-        if err := client.SubscribeNewExecutionPayloadHeaders(ch); err != nil {
-            log.Fatal(err)
-        }
-    }()
-
-    for header := range ch {
-        handleHeader(block)        
-    }
-}
-```
+- To
+- From
+- MethodID
+- Value (greater than, less than, equal to)
 
 #### Execution Payloads (new blocks with transactions)
+
+Execution payloads are returned as `*fiber.Block` which is a wrapper around `go-ethereum` native types such as `Header`, `Transaction` and `Withdrawal`.
+
 ```go
 import (
     ...
@@ -158,7 +152,7 @@ import (
 func main() {
     ...
 
-    ch := make(chan *fiber.ExecutionPayload)
+    ch := make(chan *fiber.Block)
 
     go func() {
         if err := client.SubscribeNewExecutionPayloads(ch); err != nil {
@@ -167,14 +161,18 @@ func main() {
     }()
 
     for block := range ch {
-        handleBlock(block)        
+        handlePayload(block)
     }
 }
 ```
 
 #### Beacon Blocks
-Beacon blocks follow the [Consensus specs](https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#beaconblock), with the exception of the `ExecutionPayload`, which is not included to
-allow for a smaller payload size. Please use the `SubscribeNewExecutionPayloads` stream if you need it.
+
+Beacon blocks follow the [Consensus specs](https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#signedbeaconblock).
+The returned items are `*fiber.BeaconBlock` which is a wrapper around `go-eth-2` `SignedBeaconBlock` depending on the hardfork version:
+
+Each `*fiber.BeaconBlock` contains the `DataVersion` field which indicates the hardfork version of the beacon block.
+The returned type will contain either a Bellatrix (3), Capella (4) or Deneb (5) hardfork block depending on the specified DataVersion.
 
 ```go
 import (
@@ -199,8 +197,39 @@ func main() {
 }
 ```
 
+#### Raw Beacon Blocks
+
+Raw beacon blocks are raw, SSZ-encoded bytes that you can manually decode into [SignedBeaconBlocks](https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#signedbeaconblock) in your application.
+
+```go
+import (
+    ...
+    fiber "github.com/chainbound/fiber-go"
+)
+
+func main() {
+    ...
+
+    ch := make(chan []byte)
+
+    go func() {
+        if err := client.SubscribeNewRawBeaconBlocks(ch); err != nil {
+            log.Fatal(err)
+        }
+    }()
+
+    for block := range ch {
+        handleRawBeaconBlock(block)
+    }
+}
+```
+
 ### Sending Transactions
+
 #### `SendTransaction`
+
+This method supports sending a single `go-ethereum` `*types.Transaction` object to the Fiber Network.
+
 ```go
 import (
     "context"
@@ -255,7 +284,11 @@ func main() {
     doSomething(hash, timestamp)
 }
 ```
+
 #### `SendTransactionSequence`
+
+This method supports sending a sequence of transactions to the Fiber Network.
+
 ```go
 import (
     "context"
@@ -313,7 +346,11 @@ func main() {
     doSomething(hashes, timestamp)
 }
 ```
+
 #### `SendRawTransaction`
+
+This method supports sending a single raw, RLP-encoded transaction to the Fiber Network.
+
 ```go
 import (
     "context"
@@ -375,6 +412,9 @@ func main() {
 ```
 
 #### `SendRawTransactionSequence`
+
+This method supports sending a sequence of raw, RLP-encoded transactions to the Fiber Network.
+
 ```go
 import (
     "context"
