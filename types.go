@@ -106,9 +106,12 @@ func DecodeBellatrixExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, er
 
 	transactions := make([]*types.Transaction, len(payload.Transactions))
 	for i, rawTx := range payload.Transactions {
-		if err := transactions[i].UnmarshalBinary(rawTx); err != nil {
+		tx := new(types.Transaction)
+		if err := tx.UnmarshalBinary(rawTx); err != nil {
 			continue
 		}
+
+		transactions[i] = tx
 	}
 
 	basefee := new(big.Int).SetBytes(reverseBytes(payload.BaseFeePerGas[:]))
@@ -153,9 +156,12 @@ func DecodeCapellaExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, erro
 
 	transactions := make([]*types.Transaction, len(payload.Transactions))
 	for i, rawTx := range payload.Transactions {
-		if err := transactions[i].UnmarshalBinary(rawTx); err != nil {
+		tx := new(types.Transaction)
+		if err := tx.UnmarshalBinary(rawTx); err != nil {
 			continue
 		}
+
+		transactions[i] = tx
 	}
 
 	basefee := new(big.Int).SetBytes(reverseBytes(payload.BaseFeePerGas[:]))
@@ -209,9 +215,12 @@ func DecodeDenebExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, error)
 
 	transactions := make([]*types.Transaction, len(payload.Transactions))
 	for i, rawTx := range payload.Transactions {
-		if err := transactions[i].UnmarshalBinary(rawTx); err != nil {
+		tx := new(types.Transaction)
+		if err := tx.UnmarshalBinary(rawTx); err != nil {
 			continue
 		}
+
+		transactions[i] = tx
 	}
 
 	diff, _ := new(big.Int).SetString("58750003716598352816469", 10)
