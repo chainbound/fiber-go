@@ -25,6 +25,7 @@ import (
 // - submitBlock
 // - subscribeNewTxs
 // - subscribeNewRawTxs
+// - subscribeNewBlobTxs
 // - subscribeNewExecutionPayloads
 // - subscribeNewRawExecutionPayloads
 // - subscribeNewBeaconBlocks
@@ -280,6 +281,50 @@ outer:
 			}
 
 			ch <- rawTxWithSender
+		}
+	}
+}
+
+func (c *Client) SubscribeNewBlobTxs(ch chan<- *TransactionWithSender) error {
+	attempts := 0
+outer:
+	for {
+		attempts++
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
+		ctx = metadata.AppendToOutgoingContext(ctx, "x-client-version", Version)
+
+		res, err := c.client.SubscribeNewBlobTxs(ctx, &emptypb.Empty{})
+		if err != nil {
+			if attempts > 50 {
+				return fmt.Errorf("subscribing to blob transactions after 50 attempts: %w", err)
+			}
+			time.Sleep(time.Second * 2)
+			continue outer
+		}
+
+		for {
+			proto, err := res.Recv()
+			// For now, retry on every error.
+			if err != nil {
+				time.Sleep(time.Second * 2)
+				continue outer
+			}
+
+			tx := new(types.Transaction)
+			if err := tx.UnmarshalBinary(proto.RlpTransaction); err != nil {
+				continue outer
+			}
+
+			sender := common.BytesToAddress(proto.Sender)
+
+			txWithSender := TransactionWithSender{
+				Sender:      &sender,
+				Transaction: tx,
+			}
+
+			ch <- &txWithSender
 		}
 	}
 }
