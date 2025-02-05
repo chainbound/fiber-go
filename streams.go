@@ -96,7 +96,6 @@ func (c *Client) SendTransactionSequence(ctx context.Context, transactions ...*t
 	for i, tx := range transactions {
 		rlpTransaction, err := tx.MarshalBinary()
 		if err != nil {
-			fmt.Println("error marshalling transaction:", err)
 			return nil, 0, err
 		}
 
