@@ -120,7 +120,6 @@ func (c *Client) Connect(ctx context.Context) error {
 	// Setup options
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 		grpc.WithDefaultServiceConfig(serviceConfig),
 		grpc.WithWriteBufferSize(c.config.writeBufferSize),
 		grpc.WithReadBufferSize(c.config.readBufferSize),
@@ -141,7 +140,7 @@ func (c *Client) Connect(ctx context.Context) error {
 		opts = append(opts, grpc.WithKeepaliveParams(kaParams))
 	}
 
-	conn, err := grpc.DialContext(ctx, c.target, opts...)
+	conn, err := grpc.NewClient(c.target, opts...)
 	if err != nil {
 		return err
 	}
@@ -151,24 +150,25 @@ func (c *Client) Connect(ctx context.Context) error {
 	// Create the stub (client) with the channel
 	c.client = api.NewAPIClient(conn)
 
-	ctx = metadata.AppendToOutgoingContext(context.Background(), "x-api-key", c.key, "x-client-version", Version)
-	c.txStream, err = c.client.SendTransactionV2(ctx)
+	// Create a new context with metadata for stream creation
+	ctxWithMetadata := metadata.AppendToOutgoingContext(context.Background(), "x-api-key", c.key, "x-client-version", Version)
+
+	c.txStream, err = c.client.SendTransactionV2(ctxWithMetadata)
 	if err != nil {
 		return err
 	}
 
-	c.txSeqStream, err = c.client.SendTransactionSequenceV2(ctx)
+	c.txSeqStream, err = c.client.SendTransactionSequenceV2(ctxWithMetadata)
 	if err != nil {
 		return err
 	}
 
-	c.submitBlockStream, err = c.client.SubmitBlockStream(ctx)
+	c.submitBlockStream, err = c.client.SubmitBlockStream(ctxWithMetadata)
 	if err != nil {
 		return err
 	}
 
 	return nil
-
 }
 
 // Close closes all the streams and then the underlying connection. IMPORTANT: you should call this
