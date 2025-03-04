@@ -36,8 +36,7 @@ type ClientConfig struct {
 	readBufferSize    int
 	connWindowSize    int32
 	windowSize        int32
-	// Duration after which idle connections will be restarted
-	idleTimeout time.Duration
+	idleTimeout       time.Duration
 }
 
 // NewConfig creates a new config with sensible default values.
@@ -79,6 +78,7 @@ func (c *ClientConfig) SetWindowSize(size int32) *ClientConfig {
 
 // SetIdleTimeout sets the duration after which idle connections will be restarted.
 // Set to 0 to disable idle timeout (default).
+// Note: If set below 10s, gRPC will use a minimum value of 10s instead.
 func (c *ClientConfig) SetIdleTimeout(timeout time.Duration) *ClientConfig {
 	c.idleTimeout = timeout
 	return c
