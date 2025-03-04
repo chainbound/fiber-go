@@ -22,9 +22,14 @@ type MultiplexClient struct {
 
 // Returns a new multiplex client with the given targets.
 func NewMultiplexClient(targets []string, apiKey string) *MultiplexClient {
+	return NewMultiplexClientWithConfig(targets, apiKey, NewConfig())
+}
+
+// Returns a new multiplex client with the given targets and config.
+func NewMultiplexClientWithConfig(targets []string, apiKey string, config *ClientConfig) *MultiplexClient {
 	clients := make([]*Client, len(targets))
 	for i, target := range targets {
-		clients[i] = NewClient(target, apiKey)
+		clients[i] = NewClientWithConfig(target, apiKey, config)
 	}
 
 	txCache, err := lru.New[common.Hash, struct{}](8192)
