@@ -235,13 +235,11 @@ func (c *Client) waitForReadyConnection(timeout time.Duration) {
 	}
 }
 
-// backoffSubscriptionError handles exponential backoff logic for subscription retries
-// It returns true if the operation should be retried, false if it should not
-func (c *Client) backoffSubscriptionError(err error, attempts *int, backoff *time.Duration, maxBackoff time.Duration, subscriptionName string) bool {
-	// Cancel this context since we're going to retry
-
+// backoffSubscriptionError handles exponential backoff logic for subscription retries.
+// It returns false if all retries have been attempted.
+func (c *Client) backoffSubscriptionError(err error, attempts int, backoff *time.Duration, maxBackoff time.Duration, subscriptionName string) bool {
 	// After too many attempts, give up
-	if *attempts > 50 {
+	if attempts > 50 {
 		return false
 	}
 
@@ -286,7 +284,7 @@ outer:
 		if err != nil {
 			cancel() // Cancel this context since we're going to retry
 
-			if !c.backoffSubscriptionError(err, &attempts, &backoff, maxBackoff, "Transaction") {
+			if !c.backoffSubscriptionError(err, attempts, &backoff, maxBackoff, "Transaction") {
 				return fmt.Errorf("failed to subscribe to transactions after 50 attempts: %w", err)
 			}
 			continue outer
@@ -355,7 +353,7 @@ outer:
 		if err != nil {
 			cancel() // Cancel this context since we're going to retry
 
-			if !c.backoffSubscriptionError(err, &attempts, &backoff, maxBackoff, "Raw transaction") {
+			if !c.backoffSubscriptionError(err, attempts, &backoff, maxBackoff, "Raw transaction") {
 				return fmt.Errorf("failed to subscribe to raw transactions after 50 attempts: %w", err)
 			}
 			continue outer
@@ -410,7 +408,7 @@ outer:
 		if err != nil {
 			cancel() // Cancel this context since we're going to retry
 
-			if !c.backoffSubscriptionError(err, &attempts, &backoff, maxBackoff, "Blob transaction") {
+			if !c.backoffSubscriptionError(err, attempts, &backoff, maxBackoff, "Blob transaction") {
 				return fmt.Errorf("failed to subscribe to blob transactions after 50 attempts: %w", err)
 			}
 			continue outer
@@ -471,7 +469,7 @@ outer:
 		if err != nil {
 			cancel() // Cancel this context since we're going to retry
 
-			if !c.backoffSubscriptionError(err, &attempts, &backoff, maxBackoff, "Execution payload") {
+			if !c.backoffSubscriptionError(err, attempts, &backoff, maxBackoff, "Execution payload") {
 				return fmt.Errorf("subscribing to execution payloads after 50 attempts: %w", err)
 			}
 			continue outer
@@ -541,7 +539,7 @@ outer:
 		if err != nil {
 			cancel() // Cancel this context since we're going to retry
 
-			if !c.backoffSubscriptionError(err, &attempts, &backoff, maxBackoff, "Beacon block") {
+			if !c.backoffSubscriptionError(err, attempts, &backoff, maxBackoff, "Beacon block") {
 				return fmt.Errorf("subscribing to beacon blocks after 50 attempts: %w", err)
 			}
 			continue outer
@@ -616,7 +614,7 @@ outer:
 		if err != nil {
 			cancel() // Cancel this context since we're going to retry
 
-			if !c.backoffSubscriptionError(err, &attempts, &backoff, maxBackoff, "Raw beacon block") {
+			if !c.backoffSubscriptionError(err, attempts, &backoff, maxBackoff, "Raw beacon block") {
 				return fmt.Errorf("subscribing to raw beacon blocks after 50 attempts: %w", err)
 			}
 			continue outer
@@ -632,7 +630,7 @@ outer:
 			proto, err := res.Recv()
 			if err != nil {
 				// Instead of simple sleep, use backoff logic for reconnection
-				if !c.backoffSubscriptionError(err, &attempts, &backoff, maxBackoff, "Raw beacon block stream") {
+				if !c.backoffSubscriptionError(err, attempts, &backoff, maxBackoff, "Raw beacon block stream") {
 					return fmt.Errorf("error receiving beacon block after 50 attempts: %w", err)
 				}
 				continue outer
