@@ -42,7 +42,6 @@ The default configuration should work for most use cases, but you can customize 
 ```go
 // Create a custom configuration
 config := fiber.NewConfig()
-    .SetReadBufferSize(1024)
     .SetIdleTimeout(30 * time.Second) // Restart connections idle for 30 seconds
 
 // Use the configuration with a client
