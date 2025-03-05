@@ -235,6 +235,31 @@ func (c *Client) waitForReadyConnection(timeout time.Duration) {
 	}
 }
 
+// backoffSubscriptionError handles exponential backoff logic for subscription retries
+// It returns true if the operation should be retried, false if it should not
+func (c *Client) backoffSubscriptionError(err error, attempts *int, backoff *time.Duration, maxBackoff time.Duration, subscriptionName string) bool {
+	// Cancel this context since we're going to retry
+
+	// After too many attempts, give up
+	if *attempts > 50 {
+		return false
+	}
+
+	// Use exponential backoff with jitter
+	sleepTime := *backoff + time.Duration(rand.Int63n(int64(*backoff/2)))
+	fmt.Printf("%s subscription error, retrying in %v: %v\n", subscriptionName, sleepTime, err)
+	time.Sleep(sleepTime)
+
+	// Increase backoff for next attempt, up to the maximum
+	if *backoff < maxBackoff {
+		*backoff = time.Duration(float64(*backoff) * 1.5)
+		if *backoff > maxBackoff {
+			*backoff = maxBackoff
+		}
+	}
+	return true
+}
+
 // SubscribeNewTxs subscribes to new transactions, and sends transactions on the given
 // channel according to the filter. This function blocks and should be called in a goroutine.
 // If there's an error receiving the new message it will close the channel and return the error.
@@ -261,22 +286,8 @@ outer:
 		if err != nil {
 			cancel() // Cancel this context since we're going to retry
 
-			// After too many attempts, give up
-			if attempts > 50 {
+			if !c.backoffSubscriptionError(err, &attempts, &backoff, maxBackoff, "Transaction") {
 				return fmt.Errorf("failed to subscribe to transactions after 50 attempts: %w", err)
-			}
-
-			// Use exponential backoff with jitter
-			sleepTime := backoff + time.Duration(rand.Int63n(int64(backoff/2)))
-			fmt.Printf("Subscription error, retrying in %v: %v\n", sleepTime, err)
-			time.Sleep(sleepTime)
-
-			// Increase backoff for next attempt, up to the maximum
-			if backoff < maxBackoff {
-				backoff = time.Duration(float64(backoff) * 1.5)
-				if backoff > maxBackoff {
-					backoff = maxBackoff
-				}
 			}
 			continue outer
 		}
@@ -344,22 +355,8 @@ outer:
 		if err != nil {
 			cancel() // Cancel this context since we're going to retry
 
-			// After too many attempts, give up
-			if attempts > 50 {
+			if !c.backoffSubscriptionError(err, &attempts, &backoff, maxBackoff, "Raw transaction") {
 				return fmt.Errorf("failed to subscribe to raw transactions after 50 attempts: %w", err)
-			}
-
-			// Use exponential backoff with jitter
-			sleepTime := backoff + time.Duration(rand.Int63n(int64(backoff/2)))
-			fmt.Printf("Subscription error, retrying in %v: %v\n", sleepTime, err)
-			time.Sleep(sleepTime)
-
-			// Increase backoff for next attempt, up to the maximum
-			if backoff < maxBackoff {
-				backoff = time.Duration(float64(backoff) * 1.5)
-				if backoff > maxBackoff {
-					backoff = maxBackoff
-				}
 			}
 			continue outer
 		}
@@ -413,22 +410,8 @@ outer:
 		if err != nil {
 			cancel() // Cancel this context since we're going to retry
 
-			// After too many attempts, give up
-			if attempts > 50 {
+			if !c.backoffSubscriptionError(err, &attempts, &backoff, maxBackoff, "Blob transaction") {
 				return fmt.Errorf("failed to subscribe to blob transactions after 50 attempts: %w", err)
-			}
-
-			// Use exponential backoff with jitter
-			sleepTime := backoff + time.Duration(rand.Int63n(int64(backoff/2)))
-			fmt.Printf("Subscription error, retrying in %v: %v\n", sleepTime, err)
-			time.Sleep(sleepTime)
-
-			// Increase backoff for next attempt, up to the maximum
-			if backoff < maxBackoff {
-				backoff = time.Duration(float64(backoff) * 1.5)
-				if backoff > maxBackoff {
-					backoff = maxBackoff
-				}
 			}
 			continue outer
 		}
@@ -437,18 +420,19 @@ outer:
 
 		// Create a heartbeat goroutine to detect silent disconnects
 		heartbeatDone := c.createHeartbeat(5 * time.Second)
+		defer close(heartbeatDone)
 
-		// Process received data
-		receiveLoop := true
-		for receiveLoop {
+		// Receive transactions in this loop
+		for {
 			msg, err := res.Recv()
 			if err != nil {
-				fmt.Printf("Blob stream error, reconnecting: %v\n", err)
-				receiveLoop = false
-				close(heartbeatDone)
-				cancel()
-				time.Sleep(time.Second)
-				continue outer
+				if err == io.EOF {
+					fmt.Println("Stream completed")
+					break
+				}
+
+				fmt.Printf("Stream error, reconnecting: %v\n", err)
+				break
 			}
 
 			tx := new(types.Transaction)
@@ -468,8 +452,7 @@ outer:
 	}
 }
 
-// SubscribeNewExecutionPayloads subscribes to new execution payloads.
-// This function blocks and should be called in a goroutine.
+// SubscribeNewExecutionPayloads subscribes to new execution payloads, and sends them on the given channel.
 func (c *Client) SubscribeNewExecutionPayloads(ch chan<- *Block) error {
 	attempts := 0
 	backoff := time.Second * 1
@@ -488,88 +471,98 @@ outer:
 		if err != nil {
 			cancel() // Cancel this context since we're going to retry
 
-			if attempts > 50 {
+			if !c.backoffSubscriptionError(err, &attempts, &backoff, maxBackoff, "Execution payload") {
 				return fmt.Errorf("subscribing to execution payloads after 50 attempts: %w", err)
 			}
-
-			// Use exponential backoff with jitter
-			sleepTime := backoff + time.Duration(rand.Int63n(int64(backoff/2)))
-			fmt.Printf("Block subscription error, retrying in %v: %v\n", sleepTime, err)
-			time.Sleep(sleepTime)
-
-			// Increase backoff for next attempt, up to max
-			backoff = min(backoff*2, maxBackoff)
-
 			continue outer
 		}
 
-		// Reset backoff on successful connection
-		backoff = time.Second * 1
+		defer cancel()
 
 		// Create a heartbeat goroutine to detect silent disconnects
 		heartbeatDone := c.createHeartbeat(5 * time.Second)
+		defer close(heartbeatDone)
 
-		// Process received data
-		receiveLoop := true
-		for receiveLoop {
-			proto, err := res.Recv()
+		// Receive blocks in this loop
+		for {
+			msg, err := res.Recv()
 			if err != nil {
+				if err == io.EOF {
+					fmt.Println("Stream completed")
+					break
+				}
+
 				fmt.Printf("Block stream error, reconnecting: %v\n", err)
-				receiveLoop = false
-				close(heartbeatDone)
-				cancel()
-				time.Sleep(time.Second)
-				continue outer
+				break
 			}
 
 			var block *Block
 			var decodeErr error
 
-			switch proto.DataVersion {
+			switch msg.DataVersion {
 			case DataVersionBellatrix:
-				block, decodeErr = DecodeBellatrixExecutionPayload(proto)
+				block, decodeErr = DecodeBellatrixExecutionPayload(msg)
 			case DataVersionCapella:
-				block, decodeErr = DecodeCapellaExecutionPayload(proto)
+				block, decodeErr = DecodeCapellaExecutionPayload(msg)
 			case DataVersionDeneb:
-				block, decodeErr = DecodeDenebExecutionPayload(proto)
+				block, decodeErr = DecodeDenebExecutionPayload(msg)
 			}
 
 			if decodeErr != nil {
-				// Bad block data, but connection is still good
+				fmt.Printf("Failed to decode execution payload: %v\n", decodeErr)
 				continue
 			}
 
+			// Send the block to the channel
 			ch <- block
 		}
+
+		// If we break out of the loop, reconnect
+		continue outer
 	}
 }
 
-// SubscribeNewBeaconBlocks subscribes to new beacon blocks, and sends blocks on the given
-// channel. This function blocks and should be called in a goroutine.
-// If there's an error receiving the new message it will close the channel and return the error.
+// SubscribeNewBeaconBlocks subscribes to new beacon blocks, and sends them on the given channel.
 func (c *Client) SubscribeNewBeaconBlocks(ch chan<- *SignedBeaconBlock) error {
 	attempts := 0
+	backoff := time.Second * 1
+	maxBackoff := time.Second * 30
 outer:
 	for {
+		attempts++
 		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-client-version", Version)
 
+		// Wait for connection to be ready before attempting to subscribe
+		c.waitForReadyConnection(5 * time.Second)
+
 		res, err := c.client.SubscribeBeaconBlocksV2(ctx, &emptypb.Empty{})
 		if err != nil {
-			if attempts > 50 {
+			cancel() // Cancel this context since we're going to retry
+
+			if !c.backoffSubscriptionError(err, &attempts, &backoff, maxBackoff, "Beacon block") {
 				return fmt.Errorf("subscribing to beacon blocks after 50 attempts: %w", err)
 			}
-			time.Sleep(time.Second * 2)
 			continue outer
 		}
+
+		defer cancel()
+
+		// Create a heartbeat goroutine to detect silent disconnects
+		heartbeatDone := c.createHeartbeat(5 * time.Second)
+		defer close(heartbeatDone)
 
 		for {
 			proto, err := res.Recv()
 			if err != nil {
-				time.Sleep(time.Second * 2)
-				continue outer
+				if err == io.EOF {
+					fmt.Println("Stream completed")
+					break
+				}
+
+				fmt.Printf("Beacon block stream error, reconnecting: %v\n", err)
+				break
 			}
 
 			signedBeaconBlock := new(SignedBeaconBlock)
@@ -598,7 +591,6 @@ outer:
 				signedBeaconBlock.Deneb = block
 				ch <- signedBeaconBlock
 			}
-
 		}
 	}
 }
@@ -608,26 +600,41 @@ outer:
 // If there's an error receiving the new message it will close the channel and return the error.
 func (c *Client) SubscribeNewRawBeaconBlocks(ch chan<- []byte) error {
 	attempts := 0
+	backoff := time.Second * 1
+	maxBackoff := time.Second * 30
 outer:
 	for {
+		attempts++
 		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-client-version", Version)
 
+		// Wait for connection to be ready before attempting to subscribe
+		c.waitForReadyConnection(5 * time.Second)
+
 		res, err := c.client.SubscribeBeaconBlocksV2(ctx, &emptypb.Empty{})
 		if err != nil {
-			if attempts > 50 {
+			cancel() // Cancel this context since we're going to retry
+
+			if !c.backoffSubscriptionError(err, &attempts, &backoff, maxBackoff, "Raw beacon block") {
 				return fmt.Errorf("subscribing to raw beacon blocks after 50 attempts: %w", err)
 			}
-			time.Sleep(time.Second * 2)
 			continue outer
 		}
+
+		defer cancel()
+
+		// Create a heartbeat goroutine to detect silent disconnects
+		heartbeatDone := c.createHeartbeat(5 * time.Second)
+		defer close(heartbeatDone)
 
 		for {
 			proto, err := res.Recv()
 			if err != nil {
-				time.Sleep(time.Second * 2)
+				// Instead of simple sleep, use backoff logic for reconnection
+				if !c.backoffSubscriptionError(err, &attempts, &backoff, maxBackoff, "Raw beacon block stream") {
+					return fmt.Errorf("error receiving beacon block after 50 attempts: %w", err)
+				}
 				continue outer
 			}
 
