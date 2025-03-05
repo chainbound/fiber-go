@@ -10,6 +10,7 @@ import (
 	"github.com/chainbound/fiber-go/protobuf/api"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
@@ -76,9 +77,11 @@ func (c *ClientConfig) SetWindowSize(size int32) *ClientConfig {
 	return c
 }
 
-// SetIdleTimeout sets the duration after which idle connections will be restarted.
-// Set to 0 to disable idle timeout (default).
-// Note: If set below 10s, gRPC will use a minimum value of 10s instead.
+// SetIdleTimeout sets the client idle timeout. This is the duration after which
+// idle connections will be restarted. Setting to 0 disables the idle timeout.
+// This setting also affects connection monitoring frequency - when set to a value
+// greater than zero, the same duration is used for connection health checks.
+// When set to 0, a default 30-second interval is used for health checks.
 func (c *ClientConfig) SetIdleTimeout(timeout time.Duration) *ClientConfig {
 	c.idleTimeout = timeout
 	return c
@@ -167,8 +170,69 @@ func (c *Client) Connect(ctx context.Context) error {
 		return err
 	}
 
-	return nil
+	// Start connection monitor in the background
+	// This will help detect silent disconnects and trigger reconnection attempts
+	if c.config.idleTimeout > 0 {
+		// If idle timeout is set, use that as check interval
+		go c.monitorConnection(c.config.idleTimeout)
+	} else {
+		// Still monitor, but with a longer interval
+		go c.monitorConnection(30 * time.Second)
+	}
 
+	return nil
+}
+
+// monitorConnection periodically checks the gRPC connection state
+// and attempts to reconnect if the connection appears to be dead
+func (c *Client) monitorConnection(checkInterval time.Duration) {
+	// Use default interval if not specified
+	if checkInterval <= 0 {
+		checkInterval = 10 * time.Second
+	}
+
+	ticker := time.NewTicker(checkInterval)
+	defer ticker.Stop()
+
+	for {
+		<-ticker.C
+
+		// Check connection state
+		state := c.conn.GetState()
+		if state != connectivity.Ready && state != connectivity.Connecting && state != connectivity.Idle {
+			// If connection is in a bad state, attempt to reset it
+			c.conn.ResetConnectBackoff()
+
+			// Create a context with timeout for reconnection
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+
+			// Try to force state change
+			if !c.conn.WaitForStateChange(ctx, state) {
+				// If state doesn't change, connection might be dead
+				// We should close it to trigger reconnection in the stream methods
+				c.conn.Close()
+
+				// Attempt to create a new connection
+				newCtx, newCancel := context.WithTimeout(context.Background(), 15*time.Second)
+				newConn, err := grpc.DialContext(
+					newCtx,
+					c.target,
+					grpc.WithTransportCredentials(insecure.NewCredentials()),
+					grpc.WithBlock(),
+				)
+
+				if err == nil {
+					// Successfully created new connection
+					c.conn = newConn
+					c.client = api.NewAPIClient(newConn)
+				}
+
+				newCancel()
+			}
+
+			cancel()
+		}
+	}
 }
 
 // Close closes all the streams and then the underlying connection. IMPORTANT: you should call this

@@ -3,6 +3,8 @@ package client
 import (
 	"context"
 	"fmt"
+	"io"
+	"math/rand"
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
@@ -12,6 +14,7 @@ import (
 	"github.com/chainbound/fiber-go/protobuf/api"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -185,16 +188,64 @@ func (c *Client) SubmitBlock(ctx context.Context, sszBlock []byte) (uint64, []by
 	return res.Slot, res.StateRoot, res.Timestamp, nil
 }
 
+// min returns the smaller of x or y.
+func min(x, y time.Duration) time.Duration {
+	if x < y {
+		return x
+	}
+	return y
+}
+
+// createHeartbeat starts a goroutine that monitors the connection state
+// and triggers reconnection if the connection is in a bad state.
+// Returns a channel that should be closed when the monitoring should stop.
+func (c *Client) createHeartbeat(checkInterval time.Duration) chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(checkInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				// Check connection state
+				state := c.conn.GetState()
+				if state != connectivity.Ready && state != connectivity.Idle && state != connectivity.Connecting {
+					// Connection is in a bad state, force close it to trigger reconnection
+					fmt.Printf("Detected bad connection state: %s, forcing reconnection\n", state)
+					c.conn.Close()
+					return
+				}
+			}
+		}
+	}()
+	return done
+}
+
+// Helper function to wait for a ready connection state
+func (c *Client) waitForReadyConnection(timeout time.Duration) {
+	state := c.conn.GetState()
+	if state != connectivity.Ready && state != connectivity.Idle {
+		// Wait for connection to become ready or timeout
+		timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), timeout)
+		c.conn.WaitForStateChange(timeoutCtx, state)
+		timeoutCancel()
+	}
+}
+
 // SubscribeNewTxs subscribes to new transactions, and sends transactions on the given
 // channel according to the filter. This function blocks and should be called in a goroutine.
 // If there's an error receiving the new message it will close the channel and return the error.
 func (c *Client) SubscribeNewTxs(filter *filter.Filter, ch chan<- *TransactionWithSender) error {
 	attempts := 0
+	backoff := time.Second * 1
+	maxBackoff := time.Second * 30
 outer:
 	for {
 		attempts++
 		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-client-version", Version)
 
@@ -203,50 +254,81 @@ outer:
 			protoFilter.Encoded = filter.Encode()
 		}
 
+		// Wait for connection to be ready before attempting to subscribe
+		c.waitForReadyConnection(5 * time.Second)
+
 		res, err := c.client.SubscribeNewTxsV2(ctx, protoFilter)
 		if err != nil {
+			cancel() // Cancel this context since we're going to retry
+
+			// After too many attempts, give up
 			if attempts > 50 {
-				return fmt.Errorf("subscribing to transactions after 50 attempts: %w", err)
+				return fmt.Errorf("failed to subscribe to transactions after 50 attempts: %w", err)
 			}
-			time.Sleep(time.Second * 2)
+
+			// Use exponential backoff with jitter
+			sleepTime := backoff + time.Duration(rand.Int63n(int64(backoff/2)))
+			fmt.Printf("Subscription error, retrying in %v: %v\n", sleepTime, err)
+			time.Sleep(sleepTime)
+
+			// Increase backoff for next attempt, up to the maximum
+			if backoff < maxBackoff {
+				backoff = time.Duration(float64(backoff) * 1.5)
+				if backoff > maxBackoff {
+					backoff = maxBackoff
+				}
+			}
 			continue outer
 		}
 
+		defer cancel()
+
 		for {
-			proto, err := res.Recv()
-			// For now, retry on every error.
+			msg, err := res.Recv()
 			if err != nil {
-				time.Sleep(time.Second * 2)
-				continue outer
+				if err == io.EOF {
+					fmt.Println("Stream completed")
+					break
+				}
+
+				fmt.Printf("Stream error, reconnecting: %v\n", err)
+				break
 			}
 
+			// Decode tx
 			tx := new(types.Transaction)
-			if err := tx.UnmarshalBinary(proto.RlpTransaction); err != nil {
-				continue outer
+			if err := tx.UnmarshalBinary(msg.RlpTransaction); err != nil {
+				fmt.Printf("Error decoding transaction: %v\n", err)
+				continue
 			}
 
-			sender := common.BytesToAddress(proto.Sender)
+			// Skip transactions if we're in a bad state (e.g. reused stream)
+			if tx.Hash().String() == "" {
+				continue
+			}
 
-			txWithSender := TransactionWithSender{
-				Sender:      &sender,
+			sender := common.BytesToAddress(msg.Sender)
+			txWithSender := &TransactionWithSender{
 				Transaction: tx,
+				Sender:      &sender,
 			}
 
-			ch <- &txWithSender
+			ch <- txWithSender
 		}
 	}
 }
 
-// SubscribeNewRawTxs subscribes to new RLP-encoded transaction bytes, and sends transactions on the given
+// SubscribeNewRawTxs subscribes to new transactions, and sends the raw transaction data on the given
 // channel according to the filter. This function blocks and should be called in a goroutine.
 // If there's an error receiving the new message it will close the channel and return the error.
 func (c *Client) SubscribeNewRawTxs(filter *filter.Filter, ch chan<- *RawTransactionWithSender) error {
 	attempts := 0
+	backoff := time.Second * 1
+	maxBackoff := time.Second * 30
 outer:
 	for {
 		attempts++
 		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-client-version", Version)
 
@@ -255,69 +337,127 @@ outer:
 			protoFilter.Encoded = filter.Encode()
 		}
 
+		// Wait for connection to be ready before attempting to subscribe
+		c.waitForReadyConnection(5 * time.Second)
+
 		res, err := c.client.SubscribeNewTxsV2(ctx, protoFilter)
 		if err != nil {
+			cancel() // Cancel this context since we're going to retry
+
+			// After too many attempts, give up
 			if attempts > 50 {
-				return fmt.Errorf("subscribing to raw transactions after 50 attempts: %w", err)
+				return fmt.Errorf("failed to subscribe to raw transactions after 50 attempts: %w", err)
 			}
-			time.Sleep(time.Second * 2)
+
+			// Use exponential backoff with jitter
+			sleepTime := backoff + time.Duration(rand.Int63n(int64(backoff/2)))
+			fmt.Printf("Subscription error, retrying in %v: %v\n", sleepTime, err)
+			time.Sleep(sleepTime)
+
+			// Increase backoff for next attempt, up to the maximum
+			if backoff < maxBackoff {
+				backoff = time.Duration(float64(backoff) * 1.5)
+				if backoff > maxBackoff {
+					backoff = maxBackoff
+				}
+			}
 			continue outer
 		}
 
+		defer cancel()
+
 		for {
-			proto, err := res.Recv()
-			// For now, retry on every error.
+			msg, err := res.Recv()
 			if err != nil {
-				time.Sleep(time.Second * 2)
-				continue outer
+				if err == io.EOF {
+					fmt.Println("Stream completed")
+					break
+				}
+
+				fmt.Printf("Stream error, reconnecting: %v\n", err)
+				break
 			}
 
-			sender := common.BytesToAddress(proto.Sender)
+			// Skip empty or invalid transactions
+			if len(msg.RlpTransaction) == 0 {
+				continue
+			}
 
-			rawTxWithSender := &RawTransactionWithSender{
+			sender := common.BytesToAddress(msg.Sender)
+			ch <- &RawTransactionWithSender{
+				Rlp:    msg.RlpTransaction,
 				Sender: &sender,
-				Rlp:    proto.RlpTransaction,
 			}
-
-			ch <- rawTxWithSender
 		}
 	}
 }
 
+// SubscribeNewBlobTxs subscribes to new blob transactions, and sends transactions on the given channel.
+// This function blocks and should be called in a goroutine.
+// If there's an error receiving the new message it will close the channel and return the error.
 func (c *Client) SubscribeNewBlobTxs(ch chan<- *TransactionWithSender) error {
 	attempts := 0
+	backoff := time.Second * 1
+	maxBackoff := time.Second * 30
 outer:
 	for {
 		attempts++
 		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-client-version", Version)
 
+		// Wait for connection to be ready before attempting to subscribe
+		c.waitForReadyConnection(5 * time.Second)
+
 		res, err := c.client.SubscribeNewBlobTxs(ctx, &emptypb.Empty{})
 		if err != nil {
+			cancel() // Cancel this context since we're going to retry
+
+			// After too many attempts, give up
 			if attempts > 50 {
-				return fmt.Errorf("subscribing to blob transactions after 50 attempts: %w", err)
+				return fmt.Errorf("failed to subscribe to blob transactions after 50 attempts: %w", err)
 			}
-			time.Sleep(time.Second * 2)
+
+			// Use exponential backoff with jitter
+			sleepTime := backoff + time.Duration(rand.Int63n(int64(backoff/2)))
+			fmt.Printf("Subscription error, retrying in %v: %v\n", sleepTime, err)
+			time.Sleep(sleepTime)
+
+			// Increase backoff for next attempt, up to the maximum
+			if backoff < maxBackoff {
+				backoff = time.Duration(float64(backoff) * 1.5)
+				if backoff > maxBackoff {
+					backoff = maxBackoff
+				}
+			}
 			continue outer
 		}
 
-		for {
-			proto, err := res.Recv()
-			// For now, retry on every error.
+		defer cancel()
+
+		// Create a heartbeat goroutine to detect silent disconnects
+		heartbeatDone := c.createHeartbeat(5 * time.Second)
+
+		// Process received data
+		receiveLoop := true
+		for receiveLoop {
+			msg, err := res.Recv()
 			if err != nil {
-				time.Sleep(time.Second * 2)
+				fmt.Printf("Blob stream error, reconnecting: %v\n", err)
+				receiveLoop = false
+				close(heartbeatDone)
+				cancel()
+				time.Sleep(time.Second)
 				continue outer
 			}
 
 			tx := new(types.Transaction)
-			if err := tx.UnmarshalBinary(proto.RlpTransaction); err != nil {
-				continue outer
+			if err := tx.UnmarshalBinary(msg.RlpTransaction); err != nil {
+				// Bad transaction data, but connection is still good
+				continue
 			}
 
-			sender := common.BytesToAddress(proto.Sender)
-
+			sender := common.BytesToAddress(msg.Sender)
 			txWithSender := TransactionWithSender{
 				Sender:      &sender,
 				Transaction: tx,
@@ -328,55 +468,78 @@ outer:
 	}
 }
 
-// SubscribeNewBlocks subscribes to new execution payloads, and sends blocks on the given
-// channel. This function blocks and should be called in a goroutine.
-// If there's an error receiving the new message it will close the channel and return the error.
+// SubscribeNewExecutionPayloads subscribes to new execution payloads.
+// This function blocks and should be called in a goroutine.
 func (c *Client) SubscribeNewExecutionPayloads(ch chan<- *Block) error {
 	attempts := 0
+	backoff := time.Second * 1
+	maxBackoff := time.Second * 30
 outer:
 	for {
 		attempts++
 		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-client-version", Version)
 
+		// Wait for connection to be ready before attempting to subscribe
+		c.waitForReadyConnection(5 * time.Second)
+
 		res, err := c.client.SubscribeExecutionPayloadsV2(ctx, &emptypb.Empty{})
 		if err != nil {
+			cancel() // Cancel this context since we're going to retry
+
 			if attempts > 50 {
 				return fmt.Errorf("subscribing to execution payloads after 50 attempts: %w", err)
 			}
-			time.Sleep(time.Second * 2)
+
+			// Use exponential backoff with jitter
+			sleepTime := backoff + time.Duration(rand.Int63n(int64(backoff/2)))
+			fmt.Printf("Block subscription error, retrying in %v: %v\n", sleepTime, err)
+			time.Sleep(sleepTime)
+
+			// Increase backoff for next attempt, up to max
+			backoff = min(backoff*2, maxBackoff)
+
 			continue outer
 		}
 
-		for {
+		// Reset backoff on successful connection
+		backoff = time.Second * 1
+
+		// Create a heartbeat goroutine to detect silent disconnects
+		heartbeatDone := c.createHeartbeat(5 * time.Second)
+
+		// Process received data
+		receiveLoop := true
+		for receiveLoop {
 			proto, err := res.Recv()
 			if err != nil {
-				time.Sleep(time.Second * 2)
+				fmt.Printf("Block stream error, reconnecting: %v\n", err)
+				receiveLoop = false
+				close(heartbeatDone)
+				cancel()
+				time.Sleep(time.Second)
 				continue outer
 			}
 
+			var block *Block
+			var decodeErr error
+
 			switch proto.DataVersion {
 			case DataVersionBellatrix:
-				block, err := DecodeBellatrixExecutionPayload(proto)
-				if err != nil {
-					continue
-				}
-				ch <- block
+				block, decodeErr = DecodeBellatrixExecutionPayload(proto)
 			case DataVersionCapella:
-				block, err := DecodeCapellaExecutionPayload(proto)
-				if err != nil {
-					continue
-				}
-				ch <- block
+				block, decodeErr = DecodeCapellaExecutionPayload(proto)
 			case DataVersionDeneb:
-				block, err := DecodeDenebExecutionPayload(proto)
-				if err != nil {
-					continue
-				}
-				ch <- block
+				block, decodeErr = DecodeDenebExecutionPayload(proto)
 			}
+
+			if decodeErr != nil {
+				// Bad block data, but connection is still good
+				continue
+			}
+
+			ch <- block
 		}
 	}
 }
