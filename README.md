@@ -55,7 +55,7 @@ client := fiber.NewClientWithConfig(endpoint, apiKey, config)
 - `SetReadBufferSize(size int)`: Sets the gRPC read buffer size
 - `SetConnWindowSize(size int32)`: Sets the gRPC connection window size
 - `SetWindowSize(size int32)`: Sets the gRPC window size
-- `SetIdleTimeout(timeout time.Duration)`: Sets a timeout after which idle connections will be restarted automatically. When set to a value > 0, also controls the frequency of connection health checks. Set to 0 to disable idle timeout (default).
+- `SetIdleTimeout(timeout time.Duration)`: Sets a timeout after which idle connections will be restarted automatically. Set to 0 to disable idle timeout (default).
 
 ### Subscriptions
 

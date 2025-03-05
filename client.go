@@ -79,9 +79,6 @@ func (c *ClientConfig) SetWindowSize(size int32) *ClientConfig {
 
 // SetIdleTimeout sets the client idle timeout. This is the duration after which
 // idle connections will be restarted. Setting to 0 disables the idle timeout.
-// This setting also affects connection monitoring frequency - when set to a value
-// greater than zero, the same duration is used for connection health checks.
-// When set to 0, a default 30-second interval is used for health checks.
 func (c *ClientConfig) SetIdleTimeout(timeout time.Duration) *ClientConfig {
 	c.idleTimeout = timeout
 	return c
@@ -172,13 +169,7 @@ func (c *Client) Connect(ctx context.Context) error {
 
 	// Start connection monitor in the background
 	// This will help detect silent disconnects and trigger reconnection attempts
-	if c.config.idleTimeout > 0 {
-		// If idle timeout is set, use that as check interval
-		go c.monitorConnection(c.config.idleTimeout)
-	} else {
-		// Still monitor, but with a longer interval
-		go c.monitorConnection(30 * time.Second)
-	}
+	go c.monitorConnection(2 * time.Second)
 
 	return nil
 }
