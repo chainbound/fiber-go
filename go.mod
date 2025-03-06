@@ -14,23 +14,18 @@ require (
 )
 
 require (
-	github.com/fatih/color v1.18.0 // indirect
 	github.com/ferranbt/fastssz v0.1.4 // indirect
 	github.com/goccy/go-yaml v1.15.17 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
-	github.com/mattn/go-colorable v0.1.14 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prysmaticlabs/go-bitfield v0.0.0-20240618144021-706c95b2dd15 // indirect
-	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
 require (
 	github.com/bits-and-blooms/bitset v1.20.0 // indirect
-	github.com/btcsuite/btcd/btcec/v2 v2.3.4 // indirect
 	github.com/consensys/bavard v0.1.29 // indirect
 	github.com/consensys/gnark-crypto v0.16.0 // indirect
 	github.com/crate-crypto/go-ipa v0.0.0-20240724233137-53bbb0ceb27a // indirect
@@ -39,7 +34,6 @@ require (
 	github.com/emicklei/dot v1.6.4 // indirect
 	github.com/ethereum/c-kzg-4844 v1.0.3 // indirect
 	github.com/ethereum/go-verkle v0.2.2 // indirect
-	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/supranational/blst v0.3.13 // indirect
