@@ -203,8 +203,10 @@ outer:
 			protoFilter.Encoded = filter.Encode()
 		}
 
+		c.logger.Debugw("Subscribing to transactions")
 		res, err := c.client.SubscribeNewTxsV2(ctx, protoFilter)
 		if err != nil {
+			c.logger.Errorw("Error subscribing to transactions", "error", err)
 			if attempts > 50 {
 				return fmt.Errorf("subscribing to transactions after 50 attempts: %w", err)
 			}
@@ -216,6 +218,7 @@ outer:
 			proto, err := res.Recv()
 			// For now, retry on every error.
 			if err != nil {
+				c.logger.Errorw("Error receiving transactions", "error", err)
 				time.Sleep(time.Second * 2)
 				continue outer
 			}
@@ -255,8 +258,10 @@ outer:
 			protoFilter.Encoded = filter.Encode()
 		}
 
+		c.logger.Debugw("Subscribing to raw transactions")
 		res, err := c.client.SubscribeNewTxsV2(ctx, protoFilter)
 		if err != nil {
+			c.logger.Errorw("Error subscribing to raw transactions", "error", err)
 			if attempts > 50 {
 				return fmt.Errorf("subscribing to raw transactions after 50 attempts: %w", err)
 			}
@@ -268,6 +273,7 @@ outer:
 			proto, err := res.Recv()
 			// For now, retry on every error.
 			if err != nil {
+				c.logger.Errorw("Error receiving raw transactions", "error", err)
 				time.Sleep(time.Second * 2)
 				continue outer
 			}
@@ -294,8 +300,10 @@ outer:
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-client-version", Version)
 
+		c.logger.Debugw("Subscribing to blob transactions")
 		res, err := c.client.SubscribeNewBlobTxs(ctx, &emptypb.Empty{})
 		if err != nil {
+			c.logger.Errorw("Error subscribing to blob transactions", "error", err)
 			if attempts > 50 {
 				return fmt.Errorf("subscribing to blob transactions after 50 attempts: %w", err)
 			}
@@ -307,6 +315,7 @@ outer:
 			proto, err := res.Recv()
 			// For now, retry on every error.
 			if err != nil {
+				c.logger.Errorw("Error receiving blob transactions", "error", err)
 				time.Sleep(time.Second * 2)
 				continue outer
 			}
@@ -341,8 +350,10 @@ outer:
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-client-version", Version)
 
+		c.logger.Debugw("Subscribing to execution payloads")
 		res, err := c.client.SubscribeExecutionPayloadsV2(ctx, &emptypb.Empty{})
 		if err != nil {
+			c.logger.Errorw("Error subscribing to execution payloads", "error", err)
 			if attempts > 50 {
 				return fmt.Errorf("subscribing to execution payloads after 50 attempts: %w", err)
 			}
@@ -353,6 +364,7 @@ outer:
 		for {
 			proto, err := res.Recv()
 			if err != nil {
+				c.logger.Errorw("Error receiving execution payloads", "error", err)
 				time.Sleep(time.Second * 2)
 				continue outer
 			}
@@ -393,8 +405,10 @@ outer:
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-client-version", Version)
 
+		c.logger.Debugw("Subscribing to beacon blocks")
 		res, err := c.client.SubscribeBeaconBlocksV2(ctx, &emptypb.Empty{})
 		if err != nil {
+			c.logger.Errorw("Error subscribing to beacon blocks", "error", err)
 			if attempts > 50 {
 				return fmt.Errorf("subscribing to beacon blocks after 50 attempts: %w", err)
 			}
@@ -405,6 +419,7 @@ outer:
 		for {
 			proto, err := res.Recv()
 			if err != nil {
+				c.logger.Errorw("Error receiving beacon blocks", "error", err)
 				time.Sleep(time.Second * 2)
 				continue outer
 			}
@@ -452,8 +467,10 @@ outer:
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key)
 		ctx = metadata.AppendToOutgoingContext(ctx, "x-client-version", Version)
 
+		c.logger.Debugw("Subscribing to raw beacon blocks")
 		res, err := c.client.SubscribeBeaconBlocksV2(ctx, &emptypb.Empty{})
 		if err != nil {
+			c.logger.Errorw("Error subscribing to raw beacon blocks", "error", err)
 			if attempts > 50 {
 				return fmt.Errorf("subscribing to raw beacon blocks after 50 attempts: %w", err)
 			}
@@ -464,6 +481,7 @@ outer:
 		for {
 			proto, err := res.Recv()
 			if err != nil {
+				c.logger.Errorw("Error receiving raw beacon blocks", "error", err)
 				time.Sleep(time.Second * 2)
 				continue outer
 			}

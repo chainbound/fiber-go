@@ -35,6 +35,32 @@ func main() {
 }
 ```
 
+### Client Configuration
+
+The default configuration should work for most use cases, but you can customize it:
+
+```go
+// Create a custom configuration
+config := fiber.NewConfig()
+    .SetReadBufferSize(1024)
+    .SetIdleTimeout(10 * time.Second) // Restart connections idle for 10 seconds
+    .SetHealthCheckInterval(10 * time.Second) // Check connection health every 10 seconds
+
+// Use the configuration with a client
+client := fiber.NewClientWithConfig(endpoint, apiKey, config)
+```
+
+#### Available Configuration Options
+
+- `EnableCompression()`: Enables gzip compression for all requests and responses
+- `SetWriteBufferSize(size int)`: Sets the gRPC write buffer size
+- `SetReadBufferSize(size int)`: Sets the gRPC read buffer size
+- `SetConnWindowSize(size int32)`: Sets the gRPC connection window size
+- `SetWindowSize(size int32)`: Sets the gRPC window size
+- `SetIdleTimeout(timeout time.Duration)`: Sets a timeout after which idle connections will be restarted automatically. Set to 0 to disable (default).
+- `SetHealthCheckInterval(interval time.Duration)`: Sets the interval for health checks. Set to 0 to disable (default).
+- `SetLogLevel(level string)`: Sets the log level. Default is `panic` (which never logs).
+
 ### Subscriptions
 
 You can find some examples on how to subscribe below. `fiber-go` uses the familiar `go-ethereum` core types where possible,
