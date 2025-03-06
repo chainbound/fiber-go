@@ -8,6 +8,7 @@ require (
 	github.com/attestantio/go-eth2-client v0.23.1
 	github.com/ethereum/go-ethereum v1.14.13
 	github.com/hashicorp/golang-lru/v2 v2.0.7
+	go.uber.org/zap v1.27.0
 	golang.org/x/sync v0.11.0
 	google.golang.org/grpc v1.70.0
 	google.golang.org/protobuf v1.36.4
@@ -37,6 +38,7 @@ require (
 	github.com/holiman/uint256 v1.3.2 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/supranational/blst v0.3.13 // indirect
+	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/crypto v0.32.0 // indirect
 	golang.org/x/exp v0.0.0-20250128182459-e0ece0dbea4c // indirect
 	golang.org/x/net v0.34.0 // indirect

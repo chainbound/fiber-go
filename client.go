@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/chainbound/fiber-go/protobuf/api"
+	"go.uber.org/zap"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
@@ -25,6 +26,7 @@ type Client struct {
 	config *ClientConfig
 	client api.APIClient
 	key    string
+	logger *zap.SugaredLogger
 
 	txStream          api.API_SendTransactionV2Client
 	txSeqStream       api.API_SendTransactionSequenceV2Client
@@ -39,6 +41,7 @@ type ClientConfig struct {
 	windowSize        int32
 	idleTimeout       time.Duration
 	hcInterval        time.Duration
+	logLevel          string
 }
 
 // NewConfig creates a new config with sensible default values.
@@ -51,6 +54,7 @@ func NewConfig() *ClientConfig {
 		windowSize:        1024 * 256,
 		idleTimeout:       0,
 		hcInterval:        10 * time.Second,
+		logLevel:          "fatal",
 	}
 }
 
@@ -93,6 +97,11 @@ func (c *ClientConfig) SetHealthCheckInterval(interval time.Duration) *ClientCon
 	return c
 }
 
+func (c *ClientConfig) SetLogLevel(level string) *ClientConfig {
+	c.logLevel = level
+	return c
+}
+
 func NewClient(target, apiKey string) *Client {
 	return NewClientWithConfig(target, apiKey, NewConfig())
 }
@@ -121,6 +130,8 @@ func (c *Client) Connect(ctx context.Context) error {
 			}
 		}]
 	}`
+
+	c.logger = GetLogger(c.config.logLevel)
 
 	if c.config.enableCompression {
 		registerGzipCompression()
@@ -175,7 +186,10 @@ func (c *Client) Connect(ctx context.Context) error {
 		return err
 	}
 
+	c.logger.Infof("Connected to %s", c.target)
+
 	if c.config.hcInterval > 0 {
+		c.logger.Debugw("Starting health check", "interval", c.config.hcInterval)
 		// Start the health check
 		go c.startHealthCheck()
 	}
@@ -189,6 +203,7 @@ func (c *Client) startHealthCheck() {
 
 	for range ticker.C {
 		if c.conn.GetState() != connectivity.Ready {
+			c.logger.Warn("Connection is not ready, reconnecting...")
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			// Reconnect
 			c.txStream.CloseSend()

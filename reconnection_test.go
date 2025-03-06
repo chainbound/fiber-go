@@ -31,7 +31,7 @@ func testReconnection(t *testing.T, target, apiKey string) {
 	t.Logf("========== CONNECTION SETUP ==========")
 
 	// Create configuration
-	config := NewConfig().SetIdleTimeout(10 * time.Second).SetHealthCheckInterval(10 * time.Second)
+	config := NewConfig().SetIdleTimeout(10 * time.Second).SetHealthCheckInterval(10 * time.Second).SetLogLevel("debug")
 
 	// Create client
 	fiber := NewClientWithConfig(target, apiKey, config)
