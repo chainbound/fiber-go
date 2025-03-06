@@ -59,6 +59,7 @@ client := fiber.NewClientWithConfig(endpoint, apiKey, config)
 - `SetWindowSize(size int32)`: Sets the gRPC window size
 - `SetIdleTimeout(timeout time.Duration)`: Sets a timeout after which idle connections will be restarted automatically. Set to 0 to disable (default).
 - `SetHealthCheckInterval(interval time.Duration)`: Sets the interval for health checks. Set to 0 to disable (default).
+- `SetLogLevel(level string)`: Sets the log level. Default is `panic` (which never logs).
 
 ### Subscriptions
 
