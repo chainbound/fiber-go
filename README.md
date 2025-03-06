@@ -43,7 +43,8 @@ The default configuration should work for most use cases, but you can customize 
 // Create a custom configuration
 config := fiber.NewConfig()
     .SetReadBufferSize(1024)
-    .SetIdleTimeout(30 * time.Second) // Restart connections idle for 30 seconds
+    .SetIdleTimeout(10 * time.Second) // Restart connections idle for 10 seconds
+    .SetHealthCheckInterval(10 * time.Second) // Check connection health every 10 seconds
 
 // Use the configuration with a client
 client := fiber.NewClientWithConfig(endpoint, apiKey, config)
@@ -57,6 +58,7 @@ client := fiber.NewClientWithConfig(endpoint, apiKey, config)
 - `SetConnWindowSize(size int32)`: Sets the gRPC connection window size
 - `SetWindowSize(size int32)`: Sets the gRPC window size
 - `SetIdleTimeout(timeout time.Duration)`: Sets a timeout after which idle connections will be restarted automatically. Set to 0 to disable (default).
+- `SetHealthCheckInterval(interval time.Duration)`: Sets the interval for health checks. Set to 0 to disable (default).
 
 ### Subscriptions
 
