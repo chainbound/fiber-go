@@ -212,7 +212,9 @@ func (c *Client) startHealthCheck() {
 
 			// Reconnect, this will start a new health check goroutine so we
 			// return from the current one.
-			c.Connect(ctx)
+			if err := c.Connect(ctx); err != nil {
+				c.logger.Errorf("Error reconnecting during health check: %v", err)
+			}
 
 			cancel()
 
