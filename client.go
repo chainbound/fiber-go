@@ -204,12 +204,9 @@ func (c *Client) startHealthCheck() {
 		if c.conn.GetState() != connectivity.Ready {
 			c.logger.Warn("Connection is not ready, reconnecting...")
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			// Reconnect
-			c.txStream.CloseSend()
-			c.txSeqStream.CloseSend()
-			c.submitBlockStream.CloseSend()
 
-			c.conn.Close()
+			// Close the connection and all streams
+			c.Close()
 
 			// Reconnect, this will start a new health check goroutine so we
 			// return from the current one.
