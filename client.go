@@ -205,8 +205,10 @@ func (c *Client) startHealthCheck() {
 			c.logger.Warn("Connection is not ready, reconnecting...")
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 
-			// Close the connection and all streams
-			c.Close()
+			// Close the connection and all streams, logging any error during close
+			if err := c.Close(); err != nil {
+				c.logger.Warnf("Error closing client during health check reconnect: %v", err)
+			}
 
 			// Reconnect, this will start a new health check goroutine so we
 			// return from the current one.
