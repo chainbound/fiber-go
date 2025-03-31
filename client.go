@@ -225,9 +225,18 @@ func (c *Client) startHealthCheck() {
 // Close closes all the streams and then the underlying connection. IMPORTANT: you should call this
 // to ensure correct API accounting.
 func (c *Client) Close() error {
-	c.txStream.CloseSend()
-	c.txSeqStream.CloseSend()
-	c.submitBlockStream.CloseSend()
+	if c.txStream != nil {
+		c.txStream.CloseSend()
+	}
+	if c.txSeqStream != nil {
+		c.txSeqStream.CloseSend()
+	}
+	if c.submitBlockStream != nil {
+		c.submitBlockStream.CloseSend()
+	}
 
-	return c.conn.Close()
+	if c.conn != nil {
+		return c.conn.Close()
+	}
+	return nil
 }
