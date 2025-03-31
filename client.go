@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/chainbound/fiber-go/protobuf/api"
+	"github.com/sethvargo/go-retry"
 	"go.uber.org/zap"
 
 	"google.golang.org/grpc"
@@ -203,22 +204,39 @@ func (c *Client) startHealthCheck() {
 	for range ticker.C {
 		if c.conn.GetState() != connectivity.Ready {
 			c.logger.Warn("Connection is not ready, reconnecting...")
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 
-			// Close the connection and all streams, logging any error during close
-			if err := c.Close(); err != nil {
-				c.logger.Warnf("Error closing client during health check reconnect: %v", err)
+			// Configure the backoff
+			backoff := retry.NewExponential(1 * time.Second)
+
+			// Set a maximum backoff
+			backoff = retry.WithMaxDuration(60*time.Second, backoff)
+
+			// Set a maximum number of retries (10 attempts)
+			retryErr := retry.Do(context.Background(), retry.WithMaxRetries(10, backoff), func(ctx context.Context) error {
+				reconnectCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+
+				// Close the connection and all streams
+				if err := c.Close(); err != nil {
+					c.logger.Warnf("Error closing client during health check reconnect: %v", err)
+				}
+
+				// Attempt to reconnect
+				c.logger.Info("Attempting reconnection...")
+				if err := c.Connect(reconnectCtx); err != nil {
+					c.logger.Errorf("Reconnection failed: %v", err)
+					return retry.RetryableError(err) // Mark as retryable error to continue backoff
+				}
+
+				c.logger.Info("Reconnection successful")
+				return nil
+			})
+
+			if retryErr != nil {
+				c.logger.Error("Failed to reconnect after maximum attempts, health check terminated")
+				// Exit the health check goroutine
+				return
 			}
-
-			// Reconnect, this will start a new health check goroutine so we
-			// return from the current one.
-			if err := c.Connect(ctx); err != nil {
-				c.logger.Errorf("Error reconnecting during health check: %v", err)
-			}
-
-			cancel()
-
-			return
 		}
 	}
 }
