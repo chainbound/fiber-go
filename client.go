@@ -112,6 +112,7 @@ func NewClientWithConfig(target, apiKey string, config *ClientConfig) *Client {
 		config: config,
 		target: target,
 		key:    apiKey,
+		logger: GetLogger(config.logLevel),
 	}
 }
 
@@ -130,8 +131,6 @@ func (c *Client) Connect(ctx context.Context) error {
 			}
 		}]
 	}`
-
-	c.logger = GetLogger(c.config.logLevel)
 
 	if c.config.enableCompression {
 		registerGzipCompression()
