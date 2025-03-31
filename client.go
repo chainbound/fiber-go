@@ -225,13 +225,19 @@ func (c *Client) startHealthCheck() {
 // to ensure correct API accounting.
 func (c *Client) Close() error {
 	if c.txStream != nil {
-		c.txStream.CloseSend()
+		if closeErr := c.txStream.CloseSend(); closeErr != nil {
+			c.logger.Debugf("Error closing txStream: %v", closeErr)
+		}
 	}
 	if c.txSeqStream != nil {
-		c.txSeqStream.CloseSend()
+		if closeErr := c.txSeqStream.CloseSend(); closeErr != nil {
+			c.logger.Debugf("Error closing txSeqStream: %v", closeErr)
+		}
 	}
 	if c.submitBlockStream != nil {
-		c.submitBlockStream.CloseSend()
+		if closeErr := c.submitBlockStream.CloseSend(); closeErr != nil {
+			c.logger.Debugf("Error closing submitBlockStream: %v", closeErr)
+		}
 	}
 
 	if c.conn != nil {
