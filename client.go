@@ -172,19 +172,25 @@ func (c *Client) Connect(ctx context.Context) error {
 	streamCtx := metadata.AppendToOutgoingContext(context.Background(), "x-api-key", c.key, "x-client-version", Version)
 	c.txStream, err = c.client.SendTransactionV2(streamCtx)
 	if err != nil {
-		c.Close()
+		if closeErr := c.Close(); closeErr != nil {
+			c.logger.Warnf("Error closing client during initial txStream setup: %v", closeErr)
+		}
 		return err
 	}
 
 	c.txSeqStream, err = c.client.SendTransactionSequenceV2(streamCtx)
 	if err != nil {
-		c.Close()
+		if closeErr := c.Close(); closeErr != nil {
+			c.logger.Warnf("Error closing client during initial txSeqStream setup: %v", closeErr)
+		}
 		return err
 	}
 
 	c.submitBlockStream, err = c.client.SubmitBlockStream(streamCtx)
 	if err != nil {
-		c.Close()
+		if closeErr := c.Close(); closeErr != nil {
+			c.logger.Warnf("Error closing client during initial submitBlockStream setup: %v", closeErr)
+		}
 		return err
 	}
 
