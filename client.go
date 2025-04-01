@@ -172,16 +172,19 @@ func (c *Client) Connect(ctx context.Context) error {
 	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key, "x-client-version", Version)
 	c.txStream, err = c.client.SendTransactionV2(ctx)
 	if err != nil {
+		c.Close()
 		return err
 	}
 
 	c.txSeqStream, err = c.client.SendTransactionSequenceV2(ctx)
 	if err != nil {
+		c.Close()
 		return err
 	}
 
 	c.submitBlockStream, err = c.client.SubmitBlockStream(ctx)
 	if err != nil {
+		c.Close()
 		return err
 	}
 
