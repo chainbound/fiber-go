@@ -169,18 +169,18 @@ func (c *Client) Connect(ctx context.Context) error {
 	// Create the stub (client) with the channel
 	c.client = api.NewAPIClient(conn)
 
-	ctx = metadata.AppendToOutgoingContext(ctx, "x-api-key", c.key, "x-client-version", Version)
-	c.txStream, err = c.client.SendTransactionV2(ctx)
+	streamCtx := metadata.AppendToOutgoingContext(context.Background(), "x-api-key", c.key, "x-client-version", Version)
+	c.txStream, err = c.client.SendTransactionV2(streamCtx)
 	if err != nil {
 		return err
 	}
 
-	c.txSeqStream, err = c.client.SendTransactionSequenceV2(ctx)
+	c.txSeqStream, err = c.client.SendTransactionSequenceV2(streamCtx)
 	if err != nil {
 		return err
 	}
 
-	c.submitBlockStream, err = c.client.SubmitBlockStream(ctx)
+	c.submitBlockStream, err = c.client.SubmitBlockStream(streamCtx)
 	if err != nil {
 		return err
 	}
