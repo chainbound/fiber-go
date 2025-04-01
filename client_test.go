@@ -32,7 +32,11 @@ func TestConcurrentConnections(t *testing.T) {
 			defer wg.Done()
 
 			client := NewClient(target, apiKey)
-			defer client.Close()
+			defer func() {
+				if err := client.Close(); err != nil {
+					t.Logf("Client %d failed to close cleanly: %v", clientID, err)
+				}
+			}()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
