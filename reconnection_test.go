@@ -35,7 +35,11 @@ func testReconnection(t *testing.T, target, apiKey string) {
 
 	// Create client
 	fiber := NewClientWithConfig(target, apiKey, config)
-	defer fiber.Close()
+	defer func() {
+		if err := fiber.Close(); err != nil {
+			t.Logf("Error closing fiber client: %v", err)
+		}
+	}()
 
 	// Connect to the API
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -88,7 +92,9 @@ initialWait:
 	// Simulate a network interruption by forcibly closing the connection
 	t.Log("Simulating network interruption...")
 	disconnectTime := time.Now()
-	fiber.conn.Close()
+	if err := fiber.conn.Close(); err != nil {
+		t.Logf("Error forcibly closing connection: %v", err)
+	}
 
 	// Now wait for transactions to appear after reconnection
 	t.Log("Waiting for reconnection...")
