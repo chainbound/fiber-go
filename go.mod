@@ -37,6 +37,7 @@ require (
 	github.com/ethereum/go-verkle v0.2.2 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
+	github.com/sethvargo/go-retry v0.3.0 // indirect
 	github.com/supranational/blst v0.3.13 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/crypto v0.32.0 // indirect
