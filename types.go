@@ -6,6 +6,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/chainbound/fiber-go/protobuf/api"
 	"github.com/ethereum/go-ethereum/common"
@@ -43,20 +44,22 @@ type Block struct {
 
 // Helper type that wraps a signed beacon block from any of the supported hard-forks.
 //
-// This type will either contain a Bellatrix, Capella, or Deneb signed beacon block.
+// This type will either contain a Bellatrix, Capella, Deneb, or Electra signed beacon block.
 //
 // DataVersion is used to indicate which type of payload is contained in the struct:
-// 3: Bellatrix, 4: Capella, 5: Deneb
+// 3: Bellatrix, 4: Capella, 5: Deneb, 6: Electra
 type SignedBeaconBlock struct {
 	DataVersion uint32
 	Bellatrix   *bellatrix.SignedBeaconBlock
 	Capella     *capella.SignedBeaconBlock
 	Deneb       *deneb.SignedBeaconBlock
+	Electra     *electra.SignedBeaconBlock
 }
 
 const DataVersionBellatrix uint32 = 3
 const DataVersionCapella uint32 = 4
 const DataVersionDeneb uint32 = 5
+const DataVersionElectra uint32 = 6
 
 func (bb *SignedBeaconBlock) StateRoot() common.Hash {
 	switch bb.DataVersion {
@@ -66,6 +69,8 @@ func (bb *SignedBeaconBlock) StateRoot() common.Hash {
 		return common.Hash(bb.Capella.Message.StateRoot)
 	case DataVersionDeneb:
 		return common.Hash(bb.Deneb.Message.StateRoot)
+	case DataVersionElectra:
+		return common.Hash(bb.Electra.Message.StateRoot)
 	default:
 		return common.Hash{}
 	}
@@ -79,6 +84,8 @@ func (bb *SignedBeaconBlock) Slot() phase0.Slot {
 		return bb.Capella.Message.Slot
 	case DataVersionDeneb:
 		return bb.Deneb.Message.Slot
+	case DataVersionElectra:
+		return bb.Electra.Message.Slot
 	default:
 		return 0
 	}
@@ -92,6 +99,8 @@ func (bb *SignedBeaconBlock) BlockHash() []byte {
 		return bb.Capella.Message.Body.ETH1Data.BlockHash
 	case DataVersionDeneb:
 		return bb.Deneb.Message.Body.ETH1Data.BlockHash
+	case DataVersionElectra:
+		return bb.Electra.Message.Body.ETH1Data.BlockHash
 	default:
 		return []byte{}
 	}
@@ -245,6 +254,68 @@ func DecodeDenebExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, error)
 		UncleHash:        common.Hash([32]byte{}), // Uncle hashes are always empty after merge
 		TxHash:           common.Hash{},           // TODO: this is not present in block
 		ParentBeaconRoot: &common.Hash{},          // TODO: this is not present in block
+	}
+
+	withdrawals := make([]*types.Withdrawal, len(payload.Withdrawals))
+	for i, withdrawal := range payload.Withdrawals {
+		withdrawals[i] = &types.Withdrawal{
+			Index:     uint64(withdrawal.Index),
+			Validator: uint64(withdrawal.ValidatorIndex),
+			Address:   common.Address(withdrawal.Address),
+			Amount:    uint64(withdrawal.Amount),
+		}
+	}
+
+	block := &Block{
+		Hash:         common.Hash(payload.BlockHash),
+		Header:       header,
+		Transactions: transactions,
+		Withdrawals:  withdrawals,
+	}
+
+	return block, nil
+}
+
+func DecodeElectraExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, error) {
+	// Electra uses the same execution payload as Deneb
+	payload := new(deneb.ExecutionPayload)
+
+	if err := payload.UnmarshalSSZ(input.SszPayload); err != nil {
+		return nil, err
+	}
+
+	transactions := make([]*types.Transaction, len(payload.Transactions))
+	for i, rawTx := range payload.Transactions {
+		tx := new(types.Transaction)
+		if err := tx.UnmarshalBinary(rawTx); err != nil {
+			continue
+		}
+
+		transactions[i] = tx
+	}
+
+	diff, _ := new(big.Int).SetString("58750003716598352816469", 10)
+
+	header := &types.Header{
+		ParentHash:       common.Hash(payload.ParentHash),
+		Coinbase:         common.Address(payload.FeeRecipient),
+		Root:             common.Hash(payload.StateRoot),
+		ReceiptHash:      common.Hash(payload.ReceiptsRoot),
+		Bloom:            payload.LogsBloom,
+		Difficulty:       diff,
+		Number:           new(big.Int).SetUint64(payload.BlockNumber),
+		GasLimit:         payload.GasLimit,
+		GasUsed:          payload.GasUsed,
+		Time:             payload.Timestamp,
+		Extra:            payload.ExtraData,
+		MixDigest:        payload.PrevRandao,
+		BaseFee:          payload.BaseFeePerGas.ToBig(),
+		BlobGasUsed:      &payload.BlobGasUsed,
+		ExcessBlobGas:    &payload.ExcessBlobGas,
+		Nonce:            [8]byte{},               // Nonce is always 0 after merge
+		UncleHash:        common.Hash([32]byte{}), // Uncle hashes are always empty after merge
+		TxHash:           common.Hash{},           // TODO: this is not present in block
+		ParentBeaconRoot: &common.Hash{},          // TODO: this is not present in block,
 	}
 
 	withdrawals := make([]*types.Withdrawal, len(payload.Withdrawals))
