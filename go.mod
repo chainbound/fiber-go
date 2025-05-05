@@ -23,9 +23,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prysmaticlabs/go-bitfield v0.0.0-20240618144021-706c95b2dd15 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-)
-
-require (
 	github.com/bits-and-blooms/bitset v1.20.0 // indirect
 	github.com/consensys/bavard v0.1.29 // indirect
 	github.com/consensys/gnark-crypto v0.16.0 // indirect
