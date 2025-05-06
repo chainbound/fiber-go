@@ -316,6 +316,7 @@ func DecodeElectraExecutionPayload(input *api.ExecutionPayloadMsg) (*Block, erro
 		UncleHash:        common.Hash([32]byte{}), // Uncle hashes are always empty after merge
 		TxHash:           common.Hash{},           // TODO: this is not present in block
 		ParentBeaconRoot: &common.Hash{},          // TODO: this is not present in block,
+		RequestsHash:     &common.Hash{},          // TODO: this is not present in block
 	}
 
 	withdrawals := make([]*types.Withdrawal, len(payload.Withdrawals))
