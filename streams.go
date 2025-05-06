@@ -8,6 +8,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/chainbound/fiber-go/filter"
 	"github.com/chainbound/fiber-go/protobuf/api"
 	"github.com/ethereum/go-ethereum/common"
@@ -388,6 +389,12 @@ outer:
 					continue
 				}
 				ch <- block
+			case DataVersionElectra:
+				block, err := DecodeElectraExecutionPayload(proto)
+				if err != nil {
+					continue
+				}
+				ch <- block
 			}
 		}
 	}
@@ -449,8 +456,14 @@ outer:
 				}
 				signedBeaconBlock.Deneb = block
 				ch <- signedBeaconBlock
+			case DataVersionElectra:
+				block := new(electra.SignedBeaconBlock)
+				if err := block.UnmarshalSSZ(proto.SszBlock); err != nil {
+					continue outer
+				}
+				signedBeaconBlock.Electra = block
+				ch <- signedBeaconBlock
 			}
-
 		}
 	}
 }
