@@ -52,7 +52,7 @@ func NewConfig() *ClientConfig {
 		readBufferSize:    1024 * 8,
 		connWindowSize:    1024 * 512,
 		windowSize:        1024 * 256,
-		idleTimeout:       0,
+		idleTimeout:       10 * time.Second,
 		hcInterval:        10 * time.Second,
 		logLevel:          "fatal",
 	}
